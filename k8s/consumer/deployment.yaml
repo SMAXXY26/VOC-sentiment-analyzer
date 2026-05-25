@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consumer
+  namespace: cx-pipeline
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: consumer
+  template:
+    metadata:
+      labels:
+        app: consumer
+    spec:
+      containers:
+        - name: consumer
+          image: cx-consumer
+          imagePullPolicy: Never
+          command: ["consumer"]
+          env:
+            - name: KAFKA_BROKERS
+              value: "redpanda:9092"
+            - name: KAFKA_RAW_TOPIC
+              value: "feedback.raw"
+            - name: KAFKA_ANALYZED_TOPIC
+              value: "feedback.analyzed"
+            - name: ANALYZER_URL
+              value: "http://analyzer:8080/analyze"
+            - name: KAFKA_GROUP_ID
+              value: "cx-analyzer-group"
+            - name: MAX_CONCURRENT
+              value: "4"
+            - name: METRICS_ADDR
+              value: "0.0.0.0:9002"
+            - name: RUST_LOG
+              value: "info"
+          ports:
+            - containerPort: 9002
+          resources:
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+            requests:
+              memory: "64Mi"
+              cpu: "100m"

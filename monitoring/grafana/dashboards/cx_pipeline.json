@@ -1,0 +1,140 @@
+{
+  "title": "CX Semantic Analyzer Pipeline",
+  "uid": "cx-pipeline",
+  "schemaVersion": 38,
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Feedback Queued / sec",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(producer_feedback_queued_total[1m])",
+          "legendFormat": "queued/s"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Analyses Completed / sec",
+      "type": "timeseries",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(consumer_analyses_completed_total[1m])",
+          "legendFormat": "analyzed/s"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Producer Errors / sec",
+      "type": "timeseries",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(producer_errors_total[1m])",
+          "legendFormat": "{{reason}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Analysis Latency (p50 / p95 / p99)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(consumer_analysis_duration_seconds_bucket[5m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(consumer_analysis_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(consumer_analysis_duration_seconds_bucket[5m]))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Active Worker Slots",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "expr": "consumer_active_jobs",
+          "legendFormat": "active"
+        },
+        {
+          "expr": "consumer_available_workers",
+          "legendFormat": "available"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Consumer Errors / sec",
+      "type": "timeseries",
+      "gridPos": { "x": 18, "y": 8, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(consumer_analyzer_errors_total[1m])",
+          "legendFormat": "{{reason}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Producer Publish Latency p95",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 16, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(producer_publish_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95 publish latency"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Total Feedback Queued",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 16, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "producer_feedback_queued_total",
+          "legendFormat": "total queued"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Total Analyses Completed",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 16, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "consumer_analyses_completed_total",
+          "legendFormat": "total analyzed"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Avg Batch Size",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 16, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "rate(producer_batch_size_sum[5m]) / rate(producer_batch_size_count[5m])",
+          "legendFormat": "avg batch size"
+        }
+      ]
+    }
+  ]
+}

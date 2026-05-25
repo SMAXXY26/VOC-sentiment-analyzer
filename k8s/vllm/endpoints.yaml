@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: vllm
+  namespace: cx-pipeline
+subsets:
+  - addresses:
+      - ip: 192.168.1.11
+    ports:
+      - port: 8000

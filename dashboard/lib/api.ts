@@ -1,0 +1,66 @@
+export interface AnalysisItem {
+  summary: string;
+  category: string;
+  subcategory?: string;
+  sentiment: string;
+  intensity: number;
+  risk_level: string;
+  escalate: boolean;
+  churn_risk: boolean;
+  feature_requests: string[];
+  emotions: string[];
+  source: string;
+  raw_text?: string;
+  feedback_id?: string;
+  score?: number;
+}
+
+export interface AnalysesSummary {
+  total: number;
+  sentiment_distribution: Record<string, number>;
+  escalation_count: number;
+  churn_count: number;
+  avg_intensity: number;
+  top_categories: Record<string, number>;
+  top_feature_requests: string[];
+  error?: string;
+}
+
+export interface SystemStats {
+  cpu_percent: number;
+  ram_used_gb: number;
+  ram_total_gb: number;
+  ram_percent: number;
+  gpu_used_mb: number | null;
+  gpu_total_mb: number | null;
+  gpu_util_percent: number | null;
+}
+
+const BASE = "/api";
+
+export async function fetchAnalyses(limit = 50, q?: string): Promise<{ items: AnalysisItem[]; total: number }> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (q) params.set("q", q);
+  const res = await fetch(`${BASE}/analyses?${params}`);
+  return res.json();
+}
+
+export async function fetchSummary(): Promise<AnalysesSummary> {
+  const res = await fetch(`${BASE}/analyses/summary`);
+  return res.json();
+}
+
+export async function fetchSystem(): Promise<SystemStats> {
+  const res = await fetch(`${BASE}/system`);
+  return res.json();
+}
+
+export async function analyzeText(text: string): Promise<AnalysisItem> {
+  const res = await fetch(`${BASE}/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}

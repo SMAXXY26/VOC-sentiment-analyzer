@@ -1,0 +1,98 @@
+[
+  {
+    "text": "I was charged twice for my subscription this month and support hasn't responded in 3 days. I'm going to cancel if this isn't fixed immediately.",
+    "category": "Billing",
+    "subcategory": "Duplicate Charge",
+    "sentiment": "negative",
+    "intensity": 9,
+    "escalate": true,
+    "risk_level": "high",
+    "churn_risk": true,
+    "emotions": ["frustrated", "angry"],
+    "summary": "Customer double-charged and threatening cancellation due to lack of support response."
+  },
+  {
+    "text": "The new dashboard is fantastic! Exactly what I needed. Would love a dark mode option and ability to export to Excel.",
+    "category": "Product Quality",
+    "subcategory": "Feature Request",
+    "sentiment": "positive",
+    "intensity": 7,
+    "escalate": false,
+    "risk_level": "low",
+    "churn_risk": false,
+    "emotions": ["happy", "satisfied"],
+    "summary": "Customer satisfied with dashboard update and requesting dark mode and Excel export."
+  },
+  {
+    "text": "App crashes every time I try to generate a report on iOS. This has been happening for two weeks and is blocking my entire team.",
+    "category": "Technical Issue",
+    "subcategory": "App Crash",
+    "sentiment": "negative",
+    "intensity": 8,
+    "escalate": true,
+    "risk_level": "high",
+    "churn_risk": true,
+    "emotions": ["frustrated", "disappointed"],
+    "summary": "iOS app crash on report generation blocking entire team for two weeks."
+  },
+  {
+    "text": "Switched from a competitor last month and the onboarding was smooth. Support team was very helpful. Happy with the decision so far.",
+    "category": "Onboarding",
+    "subcategory": "New Customer",
+    "sentiment": "positive",
+    "intensity": 8,
+    "escalate": false,
+    "risk_level": "low",
+    "churn_risk": false,
+    "emotions": ["happy", "satisfied", "grateful"],
+    "summary": "New customer satisfied with onboarding experience after switching from competitor."
+  },
+  {
+    "text": "I need a team collaboration feature urgently. My entire company uses this tool but we can't share workspaces. We're actively evaluating alternatives.",
+    "category": "Product Quality",
+    "subcategory": "Missing Feature",
+    "sentiment": "neutral",
+    "intensity": 6,
+    "escalate": true,
+    "risk_level": "medium",
+    "churn_risk": true,
+    "emotions": ["anxious", "disappointed"],
+    "summary": "Customer urgently requesting team collaboration/workspace sharing feature, evaluating alternatives."
+  },
+  {
+    "text": "My account was locked without warning and I lost access to 2 years of historical data. This is unacceptable and I am consulting my lawyer.",
+    "category": "Account Management",
+    "subcategory": "Account Lockout",
+    "sentiment": "negative",
+    "intensity": 10,
+    "escalate": true,
+    "risk_level": "critical",
+    "churn_risk": true,
+    "emotions": ["angry", "frustrated"],
+    "summary": "Account locked without warning causing data loss, customer threatening legal action."
+  },
+  {
+    "text": "Response times from support have improved significantly over the past month. Keep it up!",
+    "category": "Customer Support",
+    "subcategory": "Positive Feedback",
+    "sentiment": "positive",
+    "intensity": 7,
+    "escalate": false,
+    "risk_level": "low",
+    "churn_risk": false,
+    "emotions": ["happy", "grateful"],
+    "summary": "Customer praising improved support response times."
+  },
+  {
+    "text": "The pricing is too high compared to competitors offering similar features. Considering downgrading to the free plan.",
+    "category": "Billing",
+    "subcategory": "Pricing Concern",
+    "sentiment": "negative",
+    "intensity": 6,
+    "escalate": false,
+    "risk_level": "medium",
+    "churn_risk": true,
+    "emotions": ["disappointed", "anxious"],
+    "summary": "Customer considering downgrade due to high pricing relative to competitor offerings."
+  }
+]

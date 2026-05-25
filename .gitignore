@@ -1,0 +1,40 @@
+# Secrets
+.env
+*.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+
+# Node / Next.js
+dashboard/node_modules/
+dashboard/.next/
+
+# Rust build output
+kafka_queue/target/
+
+# Model weights / HuggingFace cache
+.hf_cache/
+*.bin
+*.safetensors
+*.gguf
+
+# Docker / build artifacts
+build.log
+vllm.log
+results_*.json
+
+# Editor
+.vscode/
+.idea/
+
+# Claude
+.claude/

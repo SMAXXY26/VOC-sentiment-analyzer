@@ -1,0 +1,9 @@
+score,comment,created_at,customer_id,plan
+10,"Best tool we've ever used. Saves our team 3 hours a day. Please never change the keyboard shortcuts!",2026-04-02T09:00:00,cust_001,enterprise
+2,"Took 3 weeks to get onboarded because documentation is outdated. Nobody told us the legacy API was deprecated until it broke our integration.",2026-04-04T11:30:00,cust_002,starter
+8,"Generally happy. Would love better Slack integration and the ability to schedule reports to be emailed weekly.",2026-04-06T14:00:00,cust_003,pro
+0,"I am done. Three outages in one month. Our SLA requires 99.9% uptime and you've missed it twice already. We are actively evaluating CloudRival as a replacement.",2026-04-08T08:45:00,cust_004,enterprise
+9,"Really impressed with the recent updates. The new bulk import feature saved me hours this week. Minor issue: date formatting in exports is MM/DD but we need DD/MM for our EU clients.",2026-04-10T15:20:00,cust_005,pro
+5,"It works but feels dated. The UI hasn't changed in 2 years and my team finds it clunky compared to newer tools. Not terrible but not exciting.",2026-04-12T10:00:00,cust_006,starter
+1,"Cancelled. Your AI features are just ChatGPT wrappers with a markup. Not worth the enterprise price. Moving to OpenSource alternative.",2026-04-14T16:00:00,cust_007,enterprise
+7,"Solid product. Main feedback is that mobile app needs serious work — it's basically unusable for anything beyond checking notifications.",2026-04-16T13:00:00,cust_008,pro

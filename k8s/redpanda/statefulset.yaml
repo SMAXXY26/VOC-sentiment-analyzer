@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redpanda
+  namespace: cx-pipeline
+spec:
+  serviceName: redpanda
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redpanda
+  template:
+    metadata:
+      labels:
+        app: redpanda
+    spec:
+      containers:
+        - name: redpanda
+          image: redpandadata/redpanda:v23.3.18
+          command: ["/bin/sh", "-c"]
+          args:
+            - >
+              rpk redpanda start
+              --mode dev-container
+              --kafka-addr PLAINTEXT://0.0.0.0:9092
+              --advertise-kafka-addr PLAINTEXT://redpanda:9092
+          ports:
+            - containerPort: 9092
+            - containerPort: 8082
+          readinessProbe:
+            exec:
+              command: ["rpk", "cluster", "health"]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 10
+          resources:
+            limits:
+              memory: "3Gi"
+              cpu: "1"
+            requests:
+              memory: "1Gi"
+              cpu: "250m"
+          volumeMounts:
+            - name: redpanda-data
+              mountPath: /var/lib/redpanda/data
+      volumes:
+        - name: redpanda-data
+          persistentVolumeClaim:
+            claimName: redpanda-data

@@ -1,0 +1,10 @@
+.env
+__pycache__
+*.pyc
+*.pyo
+.git
+node_modules
+.next
+*.egg-info
+build.log
+Miniforge3*.sh
