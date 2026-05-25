@@ -1,13 +1,13 @@
 "use client";
 import { useState } from "react";
-import { analyzeText, AnalysisItem } from "@/lib/api";
+import { analyzeText, FeedbackAnalysis } from "@/lib/api";
 import { SentimentBadge } from "@/components/SentimentBadge";
 import { RiskBadge } from "@/components/RiskBadge";
 
 export default function AnalyzePage() {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<AnalysisItem | null>(null);
+  const [result, setResult] = useState<FeedbackAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit() {
@@ -56,43 +56,79 @@ export default function AnalyzePage() {
       )}
 
       {result && (
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-6 space-y-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Summary</p>
-              <p className="text-gray-200 text-sm leading-relaxed">{result.summary}</p>
-            </div>
-            <div className="flex flex-col items-end gap-2 shrink-0">
-              <SentimentBadge sentiment={result.sentiment} />
-              <RiskBadge level={result.risk_level} />
+        <div className="space-y-4">
+          {/* Header row */}
+          <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Summary</p>
+                <p className="text-gray-200 text-sm leading-relaxed">{result.enrichment.summary}</p>
+              </div>
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <SentimentBadge value={result.sentiment.sentiment} />
+                <RiskBadge value={result.risk.risk_level} />
+              </div>
             </div>
           </div>
 
+          {/* Scores */}
           <div className="grid grid-cols-2 gap-4">
-            <Stat label="Category" value={[result.category, result.subcategory].filter(Boolean).join(" › ")} />
-            <Stat label="Intensity Score" value={`${result.intensity} / 10`} highlight />
-            <Stat label="Escalate" value={result.escalate ? "Yes" : "No"} warn={result.escalate} />
-            <Stat label="Churn Risk" value={result.churn_risk ? "Yes" : "No"} warn={result.churn_risk} />
+            <Stat label="Category" value={[result.taxonomy.category, result.taxonomy.subcategory].filter(Boolean).join(" › ")} />
+            <Stat label="Intensity Score" value={`${result.sentiment.intensity} / 10`} highlight />
+            <Stat label="Escalate" value={result.risk.escalate ? "Yes" : "No"} warn={result.risk.escalate} />
+            <Stat label="Churn Risk" value={result.signals.churn_risk ? "Yes" : "No"} warn={result.signals.churn_risk} />
           </div>
 
-          {result.emotions?.length > 0 && (
-            <div>
+          {/* Executive summary */}
+          <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
+            <p className="text-xs text-gray-500 mb-2">Executive Summary</p>
+            <p className="text-gray-300 text-sm leading-relaxed mb-4">{result.executive.executive_summary}</p>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-500">Health Score</span>
+              <span className="text-2xl font-bold text-indigo-400">{result.executive.overall_health_score}<span className="text-sm text-gray-500 font-normal">/10</span></span>
+            </div>
+          </div>
+
+          {/* Suggested action */}
+          <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
+            <p className="text-xs text-gray-500 mb-1">Suggested Action</p>
+            <p className="text-gray-300 text-sm">{result.risk.suggested_action}</p>
+          </div>
+
+          {/* Emotions */}
+          {result.sentiment.emotions?.length > 0 && (
+            <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
               <p className="text-xs text-gray-500 mb-2">Emotions Detected</p>
               <div className="flex flex-wrap gap-2">
-                {result.emotions.map((e) => (
+                {result.sentiment.emotions.map((e) => (
                   <span key={e} className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-full">{e}</span>
                 ))}
               </div>
             </div>
           )}
 
-          {result.feature_requests?.length > 0 && (
-            <div>
+          {/* Feature requests */}
+          {result.signals.feature_requests?.length > 0 && (
+            <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
               <p className="text-xs text-gray-500 mb-2">Feature Requests</p>
               <ul className="space-y-1">
-                {result.feature_requests.map((f, i) => (
+                {result.signals.feature_requests.map((f, i) => (
                   <li key={i} className="text-sm text-gray-300 flex gap-2">
                     <span className="text-indigo-500 font-mono text-xs mt-0.5">{i + 1}.</span>{f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Action items */}
+          {result.executive.key_action_items?.length > 0 && (
+            <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
+              <p className="text-xs text-gray-500 mb-2">Action Items</p>
+              <ul className="space-y-1">
+                {result.executive.key_action_items.map((a, i) => (
+                  <li key={i} className="text-sm text-gray-300 flex gap-2">
+                    <span className="text-green-500 font-mono text-xs mt-0.5">→</span>{a}
                   </li>
                 ))}
               </ul>
@@ -106,7 +142,7 @@ export default function AnalyzePage() {
 
 function Stat({ label, value, highlight, warn }: { label: string; value: string; highlight?: boolean; warn?: boolean }) {
   return (
-    <div className="bg-gray-950 rounded-lg px-4 py-3">
+    <div className="bg-gray-900 rounded-xl border border-gray-800 px-4 py-3">
       <p className="text-xs text-gray-500 mb-0.5">{label}</p>
       <p className={`text-sm font-medium ${highlight ? "text-indigo-400" : warn ? "text-red-400" : "text-gray-200"}`}>
         {value}

@@ -1,3 +1,15 @@
+export interface FeedbackAnalysis {
+  normalized: { original: string; normalized: string; language: string; word_count: number };
+  redacted: { text: string; pii_types_found: string[] };
+  enrichment: { summary: string; key_topics: string[]; entities: string[]; context: string };
+  taxonomy: { category: string; subcategory: string; confidence: number };
+  sentiment: { sentiment: string; emotions: string[]; intensity: number };
+  signals: { churn_risk: boolean; upsell_opportunity: boolean; feature_requests: string[]; bug_reports: string[]; competitor_mentions: string[] };
+  risk: { escalate: boolean; risk_level: string; reason: string; suggested_action: string };
+  executive: { executive_summary: string; key_action_items: string[]; priority_recommendations: string[]; overall_health_score: number };
+}
+
+// Flat shape stored in Qdrant (used by /analyses)
 export interface AnalysisItem {
   summary: string;
   category: string;
@@ -55,7 +67,7 @@ export async function fetchSystem(): Promise<SystemStats> {
   return res.json();
 }
 
-export async function analyzeText(text: string): Promise<AnalysisItem> {
+export async function analyzeText(text: string): Promise<FeedbackAnalysis> {
   const res = await fetch(`${BASE}/analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
