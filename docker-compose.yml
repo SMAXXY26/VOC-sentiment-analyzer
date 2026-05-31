@@ -46,6 +46,32 @@ services:
     networks:
       - cx-net
 
+  # ── GPU Embedding Microservice (standalone, 1650 Ti) ─────────────────────
+  embedder:
+    build:
+      context: ./services/embedder
+      dockerfile: Dockerfile
+    image: cx-embedder
+    container_name: cx-embedder
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - HF_HOME=/root/.cache/huggingface
+    volumes:
+      - ./.hf_cache:/root/.cache/huggingface
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - cx-net
+
   # ── FastAPI Analyzer (lightweight, CPU) ───────────────────────────────────
   analyzer:
     build:
@@ -56,6 +82,7 @@ services:
     environment:
       - VLLM_BASE_URL=http://vllm:8000/v1
       - QDRANT_URL=http://qdrant:6333
+      - EMBEDDER_URL=http://embedder:8081
       - PYTHONUNBUFFERED=1
     volumes:
       - /home/vinesh/Documents/Summer2026:/workspace

@@ -30,7 +30,7 @@ def analyze_single(raw_text: str, feedback_id: str | None = None) -> FeedbackAna
 
     fid = feedback_id or str(uuid.uuid4())
     ctx = pipeline.invoke({"raw_text": raw_text, "feedback_id": fid})
-    return FeedbackAnalysis(
+    result = FeedbackAnalysis(
         normalized=ctx["normalized"],
         redacted=ctx["redacted"],
         enrichment=ctx["enrichment"],
@@ -39,7 +39,19 @@ def analyze_single(raw_text: str, feedback_id: str | None = None) -> FeedbackAna
         signals=ctx["signals"],
         risk=ctx["risk"],
         executive=ctx["executive"],
+        pipeline_confidence=ctx.get("pipeline_confidence"),
+        needs_review=ctx.get("needs_review"),
     )
+
+    # Queue for active learning review if confidence_stage flagged it
+    if result.needs_review:
+        try:
+            from analyzer.active_learning import enqueue
+            enqueue(fid, result)
+        except Exception:
+            pass
+
+    return result
 
 
 def analyze_batch(texts: list[str]) -> dict:

@@ -6,7 +6,16 @@ metadata:
 data:
   VLLM_BASE_URL: "http://vllm:8000/v1"
   QDRANT_URL: "http://qdrant:6333"
+  EMBEDDER_URL: "http://embedder:8081"
   MODEL_NAME: "Qwen/Qwen2.5-7B-Instruct-AWQ"
   DEDUP_THRESHOLD: "0.95"
   RAG_K: "3"
   PYTHONUNBUFFERED: "1"
+  # Draft LLM (Qwen2.5-1.5B on server laptop 1650 Ti) — empty = always use big model
+  DRAFT_LLM_URL: "http://draft-llm:8001/v1"
+  # API auth — set a non-empty string to require X-API-Key header on all endpoints
+  # except /health and /ready. Leave empty to disable auth (backward-compatible default).
+  API_KEY: ""
+  # CORS origins — comma-separated list (e.g. "https://app.example.com").
+  # Leave empty to allow all origins (default).
+  ALLOWED_ORIGINS: ""

@@ -72,7 +72,59 @@ export async function analyzeText(text: string): Promise<FeedbackAnalysis> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
+    cache: "no-store",  // never cache — analyze page is for testing
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
+}
+
+// ── Chat API ───────────────────────────────────────────────────────────────────
+
+export interface ChatResponse {
+  session_id: string;
+  reply: string;
+  quick_replies: string[];
+  customer_name?: string;
+  customer_tier?: string;
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export async function startChat(
+  customer_id: string,
+  password?: string,
+  message?: string,
+): Promise<ChatResponse> {
+  const res = await fetch(`${BASE}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ customer_id, password, message }),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function sendMessage(
+  session_id: string,
+  message: string,
+): Promise<ChatResponse> {
+  const res = await fetch(`${BASE}/chat/${session_id}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function endChat(session_id: string): Promise<void> {
+  await fetch(`${BASE}/chat/${session_id}`, { method: "DELETE", cache: "no-store" });
 }

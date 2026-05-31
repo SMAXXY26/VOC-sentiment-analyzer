@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: draft-llm
+  namespace: cx-pipeline
+spec:
+  ports:
+    - port: 8001
+      targetPort: 8001
+  clusterIP: None   # headless — routes directly to Endpoints

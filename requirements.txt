@@ -18,6 +18,10 @@ rich
 langdetect
 pytest
 qdrant-client>=1.9
+langgraph>=0.2
+scikit-learn>=1.3
 sentence-transformers>=3.0
 psutil
 pynvml
+duckduckgo-search
+bcrypt

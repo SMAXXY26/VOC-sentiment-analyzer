@@ -1,22 +1,24 @@
-# VOC Sentiment Analyzer
+# CX Semantic Analyzer
 
-A production-grade **Voice of Customer (VOC) semantic analysis pipeline** that processes raw customer feedback through a 10-stage NLP pipeline powered by a self-hosted LLM, deployed on Kubernetes.
+A production-grade **Customer Experience (CX) intelligence platform** — self-hosted LLM inference, a 10-stage LangChain pipeline, Qdrant vector DB, Rust/Kafka ingestion, an agentic support chatbot, and a Next.js analytics dashboard. Deployed on a two-machine home lab over LAN.
 
-> Built as a full-stack ML systems project — from GPU inference to Rust microservices to a live React dashboard.
+> **Measured performance:** 82 tok/s · 63 ms TTFT (p50) at concurrency 2 — on a laptop RTX 4070 8GB with AWQ + Marlin kernel. Beats desktop RTX 4070 llama.cpp numbers (71 tok/s) from a laptop GPU with 8GB vs 12GB VRAM.
 
 ---
 
 ## What It Does
 
-Paste any customer feedback → get back structured intelligence:
+Paste any customer feedback → get back structured intelligence in under 30 seconds end-to-end:
 
-- **Sentiment & intensity score** (1–10)
-- **Category taxonomy** (Billing / Product / Support / Shipping + subcategory)
-- **Risk level** (low / medium / high / critical) with escalation flag
-- **Churn risk & upsell opportunity** detection
-- **PII redaction** before any LLM sees the text
-- **Feature request & bug report extraction**
-- **Executive summary** with action items and health score
+| Output | Detail |
+|---|---|
+| Taxonomy | Category (Billing/Product/Support/Shipping/Account/Onboarding) + subcategory + confidence |
+| Sentiment & emotions | positive/negative/neutral + emotion list + intensity 1–10 |
+| Business signals | Churn risk · upsell opportunity · feature requests · bug reports · competitor mentions |
+| Risk escalation | Escalate flag · risk level (low/medium/high/critical) · suggested action |
+| Executive intelligence | 2-sentence summary · action items · health score 1–10 |
+| Confidence score | Weighted pipeline confidence (taxonomy × sentiment consistency × novelty) |
+| Deduplication | Cosine similarity ≥ 0.95 → cached result returned, zero LLM calls |
 
 ---
 
@@ -28,46 +30,88 @@ Customer Feedback
        ▼
 ┌──────────────────────────────────────────────┐
 │  Rust / Axum HTTP Gateway  (port 3001)        │
-│  POST /feedback  →  Kafka topic: feedback.raw │
+│  POST /feedback → Kafka topic: feedback.raw  │
 └──────────────────┬───────────────────────────┘
                    │
                    ▼
           ┌────────────────┐
-          │   Redpanda     │  (Kafka-compatible broker)
+          │   Redpanda     │  (Kafka-compatible, no ZooKeeper)
           └────────┬───────┘
                    │
                    ▼
 ┌──────────────────────────────────────────────┐
-│  Rust Consumer  →  Python FastAPI Analyzer   │
+│  Rust Consumer → FastAPI Analyzer (port 8080)│
 └──────────────────┬───────────────────────────┘
                    │
                    ▼
 ┌──────────────────────────────────────────────┐
-│           10-Stage LangChain Pipeline         │
+│           10-Stage LangChain LCEL Pipeline    │
 │                                               │
-│  deduplication → normalization → pii_redact   │
-│  → semantic_enrichment (RAG) → taxonomy       │
-│  → sentiment_emotion → business_signals       │
-│  → risk_escalation → executive_intelligence   │
-│  → store_result                               │
-└──────────────────┬───────────────────────────┘
-                   │
-          ┌────────┴────────┐
-          │                 │
-          ▼                 ▼
-    Qdrant Vector DB    vLLM Server
-    (dedup + RAG)    Qwen2.5-7B-AWQ
-                     RTX 4070 (8GB)
+│  dedup → normalize → pii_redact              │
+│  → semantic_enrich (RAG) → taxonomy           │
+│  → sentiment → business_signals               │
+│  → risk_escalation → executive_intel          │
+│  → confidence_score → store_result            │
+└──────┬─────────────────────┬─────────────────┘
+       │                     │
+       ▼                     ▼
+ Qdrant Vector DB       vLLM Server
+ (dedup + RAG +      Qwen2.5-7B-AWQ
+  active learning)   RTX 4070 8GB
 ```
 
 ### Deployment Topology
 
-| Machine | Role |
-|---|---|
-| Dev laptop (RTX 4070) | vLLM bare-metal inference — `0.0.0.0:8000` |
-| Server laptop (k3s) | Everything else — Redpanda, Qdrant, analyzer, dashboard, Prometheus, Grafana |
+| Machine | IP | Role |
+|---|---|---|
+| Dev laptop | 192.168.1.11 | vLLM bare-metal (RTX 4070 8GB) — port 8000 |
+| Server laptop | 192.168.1.3 | k3s cluster — all services (NodePorts below) |
 
-vLLM runs off-cluster; a headless Kubernetes `Service + Endpoints` object routes in-cluster DNS (`http://vllm:8000`) to the GPU machine over LAN.
+vLLM runs off-cluster. A headless k8s `Service + Endpoints` routes in-cluster DNS (`http://vllm:8000`) to the dev laptop over LAN — no code changes needed inside the cluster.
+
+| Service | NodePort | URL |
+|---|---|---|
+| Analyzer API | 30080 | `http://192.168.1.3:30080` |
+| Dashboard | 30300 | `http://192.168.1.3:30300` |
+| Draft LLM (1.5B) | 8001 | bare-metal on server laptop |
+
+---
+
+## Extensions
+
+Beyond the core pipeline, the following are fully implemented:
+
+### Agentic Support Chatbot (`analyzer/chatbot/`)
+LangGraph ReAct agent with **model cascade routing**:
+- **Simple queries** → Qwen2.5-1.5B (draft model, server laptop 1650 Ti, port 8001) — fast and cheap
+- **Complex / emotional queries** → Qwen2.5-7B (big model) — authoritative reasoning
+
+Tools: `get_my_orders` · `lookup_purchase_context` · `get_account_info` · `log_complaint` · `request_refund` · `escalate_to_human` · `get_faq_answer` · `web_search` (DuckDuckGo, no API key)
+
+Auth: SQLite EDBMS (`edbms.py`) — login with username + password; agent queries purchase history by keyword from the customer's account. Demo users: `alice/bob/carol/dave/eve` — password `pass123`.
+
+Session memory capped at 250 tokens. Sessions expire after 1 hour.
+
+### Topic Clustering (`analyzer/clustering.py`)
+KMeans over stored feedback embeddings. Auto-selects k via silhouette score sweep (k=3–12). LLM generates 3–5 word human-readable labels per cluster. Writes `cluster_id` + `cluster_label` back to Qdrant payloads.
+
+### Semantic Drift Detection (`analyzer/drift.py`)
+Three signals comparing recent (7 days) vs baseline (30 days):
+- Embedding centroid cosine distance (alert > 0.10)
+- Negative sentiment fraction shift (alert > 15pp)
+- Category KL divergence (alert > 0.30)
+
+### Active Learning Loop (`analyzer/active_learning.py`)
+Items with `pipeline_confidence < 0.65` are queued for human review. Human corrections patch the stored analysis and add to `few_shot_examples` — future analyses benefit via RAG.
+
+### Confidence Scoring (`analyzer/pipeline/confidence_stage.py`)
+Weighted score: taxonomy confidence (0.4) × sentiment consistency (0.3) × novelty (0.3).
+
+### Agentic Review Workflow (`analyzer/review_agent.py`)
+Separate LangGraph agent that synthesises queue status, drift alerts, and escalation counts into a `ReviewReport` with action items and risk level.
+
+### Distributed Inference (`analyzer/llm.py`)
+Round-robin across multiple vLLM endpoints via `VLLM_ENDPOINTS` env var. Thread-safe, per-endpoint LRU cache.
 
 ---
 
@@ -75,141 +119,222 @@ vLLM runs off-cluster; a headless Kubernetes `Service + Endpoints` object routes
 
 | Layer | Technology |
 |---|---|
-| LLM inference | [vLLM](https://github.com/vllm-project/vllm) · Qwen2.5-7B-Instruct-AWQ · AWQ quantization |
+| LLM inference | vLLM · Qwen2.5-7B-Instruct-AWQ · AWQ + Marlin kernel |
+| Draft model | Qwen2.5-1.5B-Instruct · port 8001 · server laptop 1650 Ti |
 | Pipeline | Python · LangChain LCEL · Pydantic structured outputs |
-| Vector DB | Qdrant (deduplication + RAG) · `all-MiniLM-L6-v2` embeddings |
-| Message broker | Redpanda (Kafka-compatible) |
-| Ingestion gateway | Rust · Axum · `rdkafka` |
-| API | FastAPI |
-| Dashboard | Next.js 14 · Tailwind CSS · SWR |
-| Kubernetes | k3s · flannel CNI · kube-router network policies |
+| Agent framework | LangGraph 0.4 · ReAct · ToolNode |
+| Vector DB | Qdrant · `all-MiniLM-L6-v2` (384-dim) |
+| Customer EDBMS | SQLite · keyword-aware purchase history queries |
+| Web search | DuckDuckGo (langchain-community, no API key) |
+| Message broker | Redpanda (Kafka-compatible, no ZooKeeper) |
+| Ingestion gateway | Rust · Axum · rdkafka |
+| API | FastAPI · optional API-key auth (`API_KEY` env var) |
+| Dashboard | Next.js 14 · Tailwind CSS · SWR · Recharts |
+| Kubernetes | k3s · flannel CNI |
 | Monitoring | Prometheus · Grafana |
 
 ---
 
-## Pipeline Stages
+## Performance
 
-Each stage is a `RunnableLambda` chained with LangChain's `|` operator. Every LLM stage uses `.with_structured_output(PydanticModel)` — no string parsing, typed outputs only.
+Measured on RTX 4070 Laptop 8GB, Qwen2.5-7B-Instruct-AWQ, `--quantization awq_marlin`, `--max-num-seqs 2`:
 
-| Stage | Type | What it does |
-|---|---|---|
-| `deduplication` | Rule-based | Cosine similarity search in Qdrant — returns cached result if duplicate |
-| `normalization` | Rule-based | Strips HTML, fixes encoding, detects language |
-| `pii_redaction` | Rule-based | Regex + spaCy NER — removes emails, phones, names before LLM sees text |
-| `semantic_enrichment` | LLM + RAG | Summary, topics, entities — augmented with similar past feedback |
-| `taxonomy` | LLM | Category, subcategory, confidence score |
-| `sentiment_emotion` | LLM | Sentiment, emotions list, intensity 1–10 |
-| `business_signals` | LLM | Churn risk, upsell opportunity, feature requests, competitor mentions |
-| `risk_escalation` | LLM | Escalate flag, risk level, suggested action |
-| `executive_intelligence` | LLM | Executive summary, action items, health score 1–10 |
-| `store_result` | Rule-based | Saves to Qdrant only if full pipeline succeeds |
+| Concurrency | Req/s | Tok/s | TTFT p50 | TTFT p95 | ITL p95 |
+|:-----------:|:-----:|:-----:|:--------:|:--------:|:-------:|
+| 1 | 3.0 | 44 | 56 ms | 60 ms | 22 ms |
+| **2** | **5.9** | **82** | **63 ms** | **65 ms** | **22 ms** |
+| 4 | 6.1 | 88 | 381 ms | 422 ms | 22 ms |
+| 8 | 5.7 | 85 | 958 ms | 1161 ms | 23 ms |
+
+**Concurrency 2 is the sweet spot** — matches `--max-num-seqs 2`. Beyond c=2, requests queue and TTFT degrades sharply while tok/s plateaus.
+
+For the full report and comparison to published numbers (A100 official Qwen benchmark, desktop RTX 4070 llama.cpp): [`tests/BENCHMARK_RESULTS.md`](tests/BENCHMARK_RESULTS.md).
 
 ---
 
-## Key Engineering Decisions
+## Quick Start
 
-**GPU memory constraint** — RTX 4070 has 8GB VRAM with ~1.1GB consumed by the display. `--gpu-memory-utilization 0.82` and AWQ quantization fit Qwen2.5-7B within the remaining headroom. `--max-num-seqs 2` caps concurrency to prevent OOM.
-
-**PII before LLM** — `pii_redaction` runs before any LLM stage. The model never sees raw email addresses, phone numbers, or named entities that spaCy identifies as persons.
-
-**Deduplication short-circuit** — if Qdrant finds a past result above 0.95 cosine similarity, the pipeline returns immediately without any LLM calls.
-
-**Offset commit bug (known)** — the Kafka consumer commits offsets before processing. A crashed analyzer silently drops the message. Tracked in `kafka_queue/src/bin/consumer.rs:128`. Fix: commit after publish to `feedback.analyzed`, add dead-letter topic.
-
----
-
-## Running It
-
-### Prerequisites
-- Dev laptop with NVIDIA GPU (8GB+ VRAM)
-- Server with k3s installed
-- Both on the same LAN
-
-### 1. Start vLLM (dev laptop)
+### 1. Start vLLM (dev laptop, bare-metal)
 ```bash
+# Open firewall so server can reach it
+sudo firewall-cmd --add-port=8000/tcp
+
 vllm serve Qwen/Qwen2.5-7B-Instruct-AWQ \
   --host 0.0.0.0 --port 8000 \
   --dtype half --max-model-len 1024 \
   --gpu-memory-utilization 0.82 \
-  --quantization awq \
-  --max-num-seqs 2 \
-  --enforce-eager
+  --quantization awq_marlin \
+  --max-num-seqs 2 --enforce-eager
 ```
 
-### 2. Deploy to k3s (server)
+### 2. Start draft LLM (server laptop, bare-metal)
 ```bash
-# Build and import custom images
+vllm serve Qwen/Qwen2.5-1.5B-Instruct \
+  --host 0.0.0.0 --port 8001 \
+  --dtype half --max-model-len 1024 \
+  --gpu-memory-utilization 0.60 \
+  --max-num-seqs 4 --enforce-eager
+```
+
+### 3. Deploy to k3s (server laptop)
+```bash
+# Sync source from dev laptop (run on server)
+rsync -av vinesh@192.168.1.11:/home/vinesh/Documents/Summer2026/ ~/Summer2026/
+
+# Build custom images
+cd ~/Summer2026
 docker build -t semantic-analyzer-dev .
 docker build --network=host -t cx-gateway kafka_queue/
-docker tag cx-gateway cx-producer && docker tag cx-gateway cx-consumer
+docker tag cx-gateway cx-producer
+docker tag cx-gateway cx-consumer
 docker build -t cx-dashboard dashboard/
 
+# Import into k3s containerd (no output until done — wait for prompt)
 for img in semantic-analyzer-dev cx-producer cx-consumer cx-dashboard; do
   docker save $img | sudo k3s ctr images import -
 done
 
 # Deploy
 kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/vllm/ k8s/qdrant/ k8s/redpanda/ k8s/analyzer/ \
-              k8s/producer/ k8s/consumer/ k8s/dashboard/ k8s/monitoring/
-```
+kubectl apply -f k8s/vllm/ k8s/draft-llm/ k8s/qdrant/ k8s/redpanda/ \
+              k8s/analyzer/ k8s/producer/ k8s/consumer/ \
+              k8s/dashboard/ k8s/monitoring/
 
-### 3. Verify
-```bash
+# Verify
 kubectl -n cx-pipeline get pods
-kubectl -n cx-pipeline exec deploy/analyzer -- curl -s http://vllm:8000/health
+curl http://192.168.1.3:30080/ready
 ```
 
-### 4. Run the pipeline
+### 4. Access
+| What | URL |
+|---|---|
+| Dashboard | http://192.168.1.3:30300 |
+| Support Chat | http://192.168.1.3:30300/chat — login: `alice` / `pass123` |
+| API docs | http://192.168.1.3:30080/docs |
+| Grafana | http://192.168.1.3:30300/grafana (separate Grafana NodePort) |
+
+---
+
+## Pipeline Usage
+
 ```bash
-# Single item
-python -m analyzer.main --text "Your product broke and I want a refund"
+# Enter dev container
+docker-compose run --rm dev
+
+# Analyze single feedback
+python -m analyzer.main --text "My order arrived damaged, I want a refund"
 
 # Batch from CSV
-python run_pipeline.py --source csv --file tests/dummy_data/reviews.csv --text-col text --out results.json
-```
+python run_pipeline.py --source csv --file tests/dummy_data/reviews.csv \
+  --text-col text --out results.json
 
----
-
-## Tests
-```bash
-# Mocked — no vLLM needed
+# Run tests (mocked — no vLLM needed)
 python -m pytest tests/test_pipeline.py -v
 
-# Live — requires vLLM running
-python -m pytest tests/test_pipeline.py -v -m live
+# Run benchmarks (requires vLLM running)
+python tests/benchmark_vllm.py --concurrency 1 2 4 --prompts 20
 ```
 
 ---
 
-## Known Issues / Tech Debt
+## Fine-Tuning Pipeline (`training/`)
 
-See `CLAUDE.md` for full architecture notes. Short version:
+QLoRA fine-tuning on pipeline outputs using unsloth + TRL. Requires `pip install unsloth trl datasets autoawq`.
 
-- Consumer commits Kafka offsets before processing (silent drop on crash)
-- No authentication on any endpoint (intentional MVP scope)
-- `unix_now()` returns `String` instead of `i64` epoch millis
-- Trend aggregation is batch-after-the-fact, not streaming
+```bash
+# 1. Export high-confidence pipeline outputs as SFT training data
+python training/export_sft_data.py --min-confidence 0.75 --out training/data/sft.jsonl
+
+# 2. Export human corrections from active learning as DPO pairs
+python training/export_dpo_data.py --out training/data/dpo.jsonl
+
+# 3. SFT — QLoRA on Qwen2.5-7B-Instruct (not AWQ — fine-tune in BF16)
+python training/sft_train.py --data training/data/sft.jsonl
+
+# 4. DPO — preference alignment on SFT adapter
+python training/dpo_train.py --data training/data/dpo.jsonl
+
+# 5. Merge LoRA + quantize to AWQ → deploy back to vLLM
+bash training/merge_and_quantize.sh
+```
 
 ---
 
 ## Project Structure
 
 ```
-├── analyzer/           # Python LangChain pipeline + FastAPI
-│   ├── pipeline/       # 10 stage modules
-│   ├── schemas.py      # Pydantic output models
-│   └── api.py          # FastAPI endpoints
-├── kafka_queue/        # Rust producer + consumer binaries
-│   └── src/bin/        # producer.rs, consumer.rs
-├── ingestion/          # Pluggable source adapters (CSV, NPS, Typeform, Google Forms)
-├── vectordb/           # Qdrant client, embedder, few-shot seeds
-├── dashboard/          # Next.js 14 frontend
-│   ├── app/analyze/    # Live feedback input page
-│   └── app/outputs/    # Analytics dashboard
-├── k8s/                # Kubernetes manifests
-│   ├── vllm/           # Headless service + endpoints (bare-metal GPU routing)
-│   ├── redpanda/       # Kafka broker StatefulSet
-│   └── monitoring/     # Prometheus + Grafana
-└── monitoring/         # Prometheus config + Grafana dashboards
+├── analyzer/                   # FastAPI app + LangChain pipeline
+│   ├── pipeline/               # 10 stage modules (normalization → store_result)
+│   │   └── confidence_stage.py # Weighted confidence score + review queue trigger
+│   ├── chatbot/                # LangGraph ReAct support agent
+│   │   ├── agent.py            # Graph, sessions, SOC/EOC lifecycle
+│   │   ├── cascade_llm.py      # Query classifier → 1.5B or 7B routing
+│   │   ├── edbms.py            # SQLite customer DB (auth + purchase history)
+│   │   └── tools.py            # 8 agent tools incl. web search
+│   ├── active_learning.py      # Review queue, human correction flow
+│   ├── clustering.py           # KMeans + silhouette auto-k + LLM labels
+│   ├── drift.py                # Centroid / sentiment / category drift signals
+│   ├── review_agent.py         # Agentic review workflow (LangGraph)
+│   ├── llm.py                  # Distributed vLLM client (round-robin)
+│   ├── schemas.py              # Pydantic output models
+│   └── api.py                  # FastAPI endpoints (21 routes + optional API-key auth)
+├── training/                   # Fine-tuning pipeline
+│   ├── export_sft_data.py      # Qdrant → ShareGPT JSONL
+│   ├── export_dpo_data.py      # Review queue corrections → DPO pairs
+│   ├── sft_train.py            # QLoRA SFT (unsloth + TRL)
+│   ├── dpo_train.py            # DPO preference alignment
+│   ├── merge_lora.py           # Merge adapter → full BF16
+│   ├── quantize_awq.py         # AWQ 4-bit quantization (autoawq)
+│   └── merge_and_quantize.sh   # One-shot post-training pipeline
+├── kafka_queue/                # Rust producer + consumer (Axum + rdkafka)
+│   └── src/bin/                # producer.rs (HTTP → Kafka) · consumer.rs (Kafka → API)
+├── ingestion/                  # Pluggable source adapters
+│   └── sources/                # CSV · NPS · Google Forms · Typeform
+├── vectordb/                   # Qdrant client, embedder, retrieval patterns
+│   ├── store.py                # store_analysis · find_duplicates · get_rag_context
+│   ├── embedder.py             # GPU embedder (EMBEDDER_URL) with CPU fallback
+│   └── retrieval.py            # filtered_search · time_window_search · export_embeddings
+├── services/embedder/          # GPU embedding microservice (FastAPI, port 8081)
+├── dashboard/                  # Next.js 14 dashboard
+│   ├── app/outputs/            # Analytics: donut chart · category bars · infinite scroll table
+│   ├── app/analyze/            # Live pipeline input (no-cache, for testing)
+│   ├── app/system/             # Hardware utilization gauges
+│   ├── app/chat/               # Full-page support chat (EDBMS login)
+│   └── components/             # ChatWidget (floating) · ChatWindow · SentimentChart · …
+├── tests/
+│   ├── benchmark_vllm.py       # TTFT · ITL · tok/s benchmark (streaming)
+│   ├── benchmark_pipeline.py   # E2E pipeline latency benchmark
+│   ├── BENCHMARK_RESULTS.md    # Measured results + comparison to published numbers
+│   └── dummy_data/             # CSV fixtures for pipeline tests
+├── k8s/                        # Kubernetes manifests
+│   ├── vllm/                   # Headless service → dev laptop GPU
+│   ├── draft-llm/              # Headless service → server laptop 1.5B model
+│   ├── analyzer/               # Deployment · Service · ConfigMap
+│   ├── qdrant/ redpanda/       # StatefulSets
+│   └── monitoring/             # Prometheus + Grafana
+└── monitoring/                 # Prometheus config + Grafana dashboards
 ```
+
+---
+
+## Architectural Tradeoffs
+
+| Decision | Chosen | Alternative | Why |
+|---|---|---|---|
+| Model cascade | App-level keyword routing | vLLM speculative decoding | vLLM spec decode is single-machine; draft and target are on different GPUs |
+| Session store | In-process dict + TTL | Redis / LangGraph CheckpointSaver | No extra infra; single-instance k3s deployment |
+| Customer DB | SQLite (auto-seeded) | PostgreSQL | Zero infra overhead for demo; portable if scale requires |
+| Fine-tuning | QLoRA (4-bit + LoRA r=16) | Full SFT / FSDP | 8GB VRAM can't hold 7B BF16 in training mode |
+| Preference alignment | DPO (no reward model) | PPO + reward model | PPO needs 3–4 models in VRAM; DPO is single-model |
+| Web search | DuckDuckGo | Tavily | No API key or quota; internal deployment |
+| Dedup | Pre-pipeline cosine ≥ 0.95 | Post-pipeline result cache | Short-circuits before any LLM calls; threshold tunable |
+| Trend aggregation | Batch after pipeline | Kafka Streams / Flink | Current scale doesn't justify streaming processor overhead |
+
+---
+
+## Known Issues / Tech Debt
+
+- **No auth on Kafka gateway** — `POST /feedback` (Rust producer) has no auth. Intentional MVP scope; the FastAPI analyzer now supports optional `API_KEY` header.
+- **Trend aggregation is batch** — acknowledged design decision; see tradeoffs above.
+- **Dedup vector mismatch** — fixed in this version: `store.py` now embeds `raw_text` (not `summary`) so dedup lookup vectors are consistent with stored vectors.
+- **qdrant-client 1.18** broke the `.search()` API (now `.query_points()`). `store.py` still uses the old API inside Docker where an older client version is pinned; `retrieval.py` uses the new API.

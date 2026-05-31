@@ -89,3 +89,6 @@ class FeedbackAnalysis(BaseModel):
     signals: BusinessSignals
     risk: RiskEscalation
     executive: ExecutiveIntelligence
+    # Computed by confidence_stage — None for analyses loaded from cache / pre-confidence era
+    pipeline_confidence: Optional[float] = None
+    needs_review: Optional[bool] = None

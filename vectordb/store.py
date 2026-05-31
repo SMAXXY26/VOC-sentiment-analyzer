@@ -20,7 +20,7 @@ def store_analysis(
     try:
         client = get_client()
         summary = analysis.enrichment.summary
-        vector = embed(summary)
+        vector = embed(raw_text)  # must match find_duplicates() which embeds raw_text
         payload = {
             "feedback_id": feedback_id,
             "source": source,
