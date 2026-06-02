@@ -15,7 +15,7 @@
 //!   METRICS_ADDR     router's own Prometheus endpoint (default 0.0.0.0:9003)
 //!   SCRAPE_INTERVAL_MS  backend metric poll interval (default 1000)
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -58,8 +58,27 @@ struct AppState {
     /// Backend base URLs, normalised to end with `/v1`.
     backends: Vec<String>,
     loads: RwLock<Vec<Load>>,
+    /// Requests this router has dispatched but not yet finished, per backend.
+    /// Scraped metrics lag by SCRAPE_INTERVAL_MS; under a burst that staleness would
+    /// make every concurrent request pick the same "idle" backend (thundering herd).
+    /// This counter is updated synchronously at dispatch/completion so routing sees
+    /// load it created since the last scrape.
+    inflight: Vec<AtomicI64>,
     rr: AtomicUsize, // round-robin fallback cursor when no load data
     client: reqwest::Client,
+}
+
+/// RAII guard: decrements a backend's in-flight counter when the proxied response
+/// (including its streamed body) is fully consumed or dropped.
+struct InflightGuard {
+    state: Arc<AppState>,
+    idx: usize,
+}
+
+impl Drop for InflightGuard {
+    fn drop(&mut self) {
+        self.state.inflight[self.idx].fetch_sub(1, Ordering::Relaxed);
+    }
 }
 
 #[tokio::main]
@@ -84,9 +103,11 @@ async fn main() {
     info!(count = backends.len(), "Router backends: {:?}", backends);
 
     let loads = vec![Load::default(); backends.len()];
+    let inflight = (0..backends.len()).map(|_| AtomicI64::new(0)).collect();
     let state = Arc::new(AppState {
         backends,
         loads: RwLock::new(loads),
+        inflight,
         rr: AtomicUsize::new(0),
         client: reqwest::Client::builder()
             .timeout(Duration::from_secs(300))
@@ -152,14 +173,20 @@ fn sum_metric(body: &str, name: &str) -> Option<f64> {
     }
 }
 
-/// Pick the least-loaded healthy backend. Falls back to round-robin across all
-/// backends when no backend is healthy/scraped yet, so the proxy never wedges.
-fn pick_backend(loads: &[Load], rr: &AtomicUsize) -> usize {
+/// Pick the least-loaded healthy backend, scoring each by scraped queue depth
+/// (EWMA) plus the requests this router has dispatched since the last scrape
+/// (`inflight`). Falls back to round-robin across all backends when none are
+/// healthy/scraped yet, so the proxy never wedges.
+fn pick_backend(loads: &[Load], inflight: &[i64], rr: &AtomicUsize) -> usize {
     let best = loads
         .iter()
         .enumerate()
         .filter(|(_, l)| l.healthy)
-        .min_by(|(_, a), (_, b)| a.ewma.total_cmp(&b.ewma))
+        .min_by(|(i, a), (j, b)| {
+            let sa = a.ewma + inflight[*i] as f64;
+            let sb = b.ewma + inflight[*j] as f64;
+            sa.total_cmp(&sb)
+        })
         .map(|(i, _)| i);
 
     best.unwrap_or_else(|| rr.fetch_add(1, Ordering::Relaxed) % loads.len().max(1))
@@ -250,8 +277,22 @@ async fn proxy_handler(
 ) -> Response {
     let idx = {
         let loads = state.loads.read().await;
-        pick_backend(&loads, &state.rr)
+        let inflight: Vec<i64> = state
+            .inflight
+            .iter()
+            .map(|a| a.load(Ordering::Relaxed))
+            .collect();
+        pick_backend(&loads, &inflight, &state.rr)
     };
+    // Count this request against the chosen backend immediately, and release it via
+    // the RAII guard once the (possibly streamed) response is done — so concurrent
+    // requests in the same scrape window see each other and spread out.
+    state.inflight[idx].fetch_add(1, Ordering::Relaxed);
+    let guard = InflightGuard {
+        state: Arc::clone(&state),
+        idx,
+    };
+
     let backend = &state.backends[idx];
     counter!("router_requests_routed_total", "backend" => backend.clone()).increment(1);
 
@@ -283,9 +324,12 @@ async fn proxy_handler(
         Ok(resp) => {
             let status = resp.status();
             let resp_headers = resp.headers().clone();
-            let stream = resp
-                .bytes_stream()
-                .map(|chunk| chunk.map_err(std::io::Error::other));
+            // Move the in-flight guard into the stream closure so the backend stays
+            // "busy" for routing purposes until the entire response body is streamed.
+            let stream = resp.bytes_stream().map(move |chunk| {
+                let _hold = &guard;
+                chunk.map_err(std::io::Error::other)
+            });
             let mut builder = Response::builder().status(status);
             for (k, v) in resp_headers.iter() {
                 // Hop-by-hop transfer-encoding would conflict with axum's framing.
@@ -360,15 +404,37 @@ mod tests {
                 ewma: 0.0,
             },
         ];
-        assert_eq!(pick_backend(&loads, &rr), 1);
+        assert_eq!(pick_backend(&loads, &[0, 0, 0], &rr), 1);
     }
 
     #[test]
     fn pick_falls_back_to_round_robin_when_none_healthy() {
         let rr = AtomicUsize::new(0);
         let loads = vec![Load::default(), Load::default()];
-        let a = pick_backend(&loads, &rr);
-        let b = pick_backend(&loads, &rr);
+        let a = pick_backend(&loads, &[0, 0], &rr);
+        let b = pick_backend(&loads, &[0, 0], &rr);
         assert_ne!(a, b); // round-robin advances
+    }
+
+    #[test]
+    fn pick_accounts_for_inflight_since_last_scrape() {
+        let rr = AtomicUsize::new(0);
+        // Both backends scraped equally idle, but we've already dispatched 3 requests
+        // to backend 0 since the last scrape — backend 1 should win.
+        let loads = vec![
+            Load {
+                running: 0.0,
+                waiting: 0.0,
+                healthy: true,
+                ewma: 1.0,
+            },
+            Load {
+                running: 0.0,
+                waiting: 0.0,
+                healthy: true,
+                ewma: 1.0,
+            },
+        ];
+        assert_eq!(pick_backend(&loads, &[3, 0], &rr), 1);
     }
 }
