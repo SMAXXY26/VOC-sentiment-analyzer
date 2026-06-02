@@ -256,7 +256,9 @@ services:
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     ports:
-      - "3000:3000"
+      # Host 3030 → container 3000: the Next.js dashboard already owns host 3000.
+      # Grafana keeps its default internal port; only the host mapping changes.
+      - "3030:3000"
     depends_on:
       - prometheus
     restart: unless-stopped

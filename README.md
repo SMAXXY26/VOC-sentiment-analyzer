@@ -24,40 +24,43 @@ Paste any customer feedback → get back structured intelligence in under 30 sec
 
 ## Architecture
 
+```mermaid
+flowchart TD
+    CF["Customer Feedback"] --> GW["Rust / Axum HTTP Gateway<br/>port 3001 · POST /feedback"]
+    GW -->|"feedback.raw"| RP["Redpanda<br/>(Kafka-compatible, no ZooKeeper)"]
+    RP --> CONS["Rust Consumer"]
+    CONS --> API["FastAPI Analyzer<br/>port 8080"]
+    API --> PIPE["10-Stage LangChain LCEL Pipeline"]
+    PIPE -->|"dedup · RAG · active learning"| QD[("Qdrant Vector DB")]
+    PIPE -->|"structured output"| VLLM["vLLM Server<br/>Qwen2.5-7B-AWQ · RTX 4070 8GB"]
+    QD -.-> PIPE
+    VLLM -.-> PIPE
+    PIPE -->|"feedback.analyzed"| RP
+    API --> DASH["Next.js Dashboard"]
+
+    classDef store fill:#1e293b,stroke:#6366f1,color:#e2e8f0;
+    classDef infer fill:#312e81,stroke:#818cf8,color:#e2e8f0;
+    class QD store;
+    class VLLM,PIPE infer;
 ```
-Customer Feedback
-       │
-       ▼
-┌──────────────────────────────────────────────┐
-│  Rust / Axum HTTP Gateway  (port 3001)        │
-│  POST /feedback → Kafka topic: feedback.raw  │
-└──────────────────┬───────────────────────────┘
-                   │
-                   ▼
-          ┌────────────────┐
-          │   Redpanda     │  (Kafka-compatible, no ZooKeeper)
-          └────────┬───────┘
-                   │
-                   ▼
-┌──────────────────────────────────────────────┐
-│  Rust Consumer → FastAPI Analyzer (port 8080)│
-└──────────────────┬───────────────────────────┘
-                   │
-                   ▼
-┌──────────────────────────────────────────────┐
-│           10-Stage LangChain LCEL Pipeline    │
-│                                               │
-│  dedup → normalize → pii_redact              │
-│  → semantic_enrich (RAG) → taxonomy           │
-│  → sentiment → business_signals               │
-│  → risk_escalation → executive_intel          │
-│  → confidence_score → store_result            │
-└──────┬─────────────────────┬─────────────────┘
-       │                     │
-       ▼                     ▼
- Qdrant Vector DB       vLLM Server
- (dedup + RAG +      Qwen2.5-7B-AWQ
-  active learning)   RTX 4070 8GB
+
+### Pipeline Stages
+
+```mermaid
+flowchart LR
+    A["raw_text"] --> B["dedup"]
+    B -->|"cosine ≥ 0.95<br/>short-circuit"| Z["cached result"]
+    B --> C["normalize"]
+    C --> D["pii_redact"]
+    D --> E["semantic_enrich<br/>(RAG)"]
+    E --> F["taxonomy"]
+    F --> G["sentiment"]
+    G --> H["business_signals"]
+    H --> I["risk_escalation"]
+    I --> J["executive_intel"]
+    J --> K["confidence_score"]
+    K -->|"< 0.65"| RQ["review queue"]
+    K --> L["store_result"]
 ```
 
 ### Deployment Topology
@@ -68,6 +71,28 @@ Customer Feedback
 | Server laptop | 192.168.1.3 | k3s cluster — all services (NodePorts below) |
 
 vLLM runs off-cluster. A headless k8s `Service + Endpoints` routes in-cluster DNS (`http://vllm:8000`) to the dev laptop over LAN — no code changes needed inside the cluster.
+
+```mermaid
+flowchart LR
+    subgraph DEV["Dev laptop · 192.168.1.11"]
+        VLLM["vLLM (bare-metal)<br/>Qwen2.5-7B-AWQ · :8000<br/>RTX 4070 8GB"]
+    end
+    subgraph SRV["Server laptop · 192.168.1.3 · k3s"]
+        direction TB
+        SVC["headless Service + Endpoints<br/>vllm:8000 → 192.168.1.11"]
+        ANALY["Analyzer · :30080"]
+        DASHK["Dashboard · :30300"]
+        QDK[("Qdrant")]
+        RPK["Redpanda"]
+        DRAFT["Draft LLM 1.5B · :8001<br/>(bare-metal)"]
+    end
+    ANALY -->|"in-cluster DNS"| SVC
+    SVC -.->|"LAN"| VLLM
+    ANALY --> QDK
+    ANALY --> RPK
+    ANALY --> DRAFT
+    DASHK --> ANALY
+```
 
 | Service | NodePort | URL |
 |---|---|---|
@@ -85,6 +110,20 @@ Beyond the core pipeline, the following are fully implemented:
 LangGraph ReAct agent with **model cascade routing**:
 - **Simple queries** → Qwen2.5-1.5B (draft model, server laptop 1650 Ti, port 8001) — fast and cheap
 - **Complex / emotional queries** → Qwen2.5-7B (big model) — authoritative reasoning
+
+```mermaid
+flowchart TD
+    U["User message"] --> SOC["start_conversation (SOC)<br/>EDBMS login + stats snapshot"]
+    SOC --> CLF{"keyword<br/>classifier"}
+    CLF -->|"simple"| SMALL["Qwen2.5-1.5B · :8001"]
+    CLF -->|"complex / emotional"| BIG["Qwen2.5-7B · :8000"]
+    SMALL --> AGENT["ReAct agent + 8 tools"]
+    BIG --> AGENT
+    AGENT -->|"tool call"| TOOLS["orders · refunds · FAQ · web_search · escalate"]
+    TOOLS --> AGENT
+    AGENT --> R["reply (≤180 tok)"]
+    R --> EOC["end_conversation (EOC)<br/>summary vector → chat_sessions"]
+```
 
 Tools: `get_my_orders` · `lookup_purchase_context` · `get_account_info` · `log_complaint` · `request_refund` · `escalate_to_human` · `get_faq_answer` · `web_search` (DuckDuckGo, no API key)
 
@@ -296,7 +335,7 @@ bash training/merge_and_quantize.sh
 │   └── retrieval.py            # filtered_search · time_window_search · export_embeddings
 ├── services/embedder/          # GPU embedding microservice (FastAPI, port 8081)
 ├── dashboard/                  # Next.js 14 dashboard
-│   ├── app/outputs/            # Analytics: donut chart · category bars · infinite scroll table
+│   ├── app/outputs/            # Split layout: scrollable feedback list (left) · stats panel (right)
 │   ├── app/analyze/            # Live pipeline input (no-cache, for testing)
 │   ├── app/system/             # Hardware utilization gauges
 │   ├── app/chat/               # Full-page support chat (EDBMS login)

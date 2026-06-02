@@ -11,6 +11,9 @@ path = "src/bin/producer.rs"
 name = "consumer"
 path = "src/bin/consumer.rs"
 
+[dev-dependencies]
+wiremock = "0.6"
+
 [dependencies]
 axum = "0.7"
 tokio = { version = "1", features = ["full"] }

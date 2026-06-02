@@ -27,6 +27,15 @@ spec:
           ports:
             - containerPort: 9092
             - containerPort: 8082
+          # Liveness: cheap TCP check on the Kafka port. Kept deliberately
+          # lighter than readiness — `rpk cluster health` can blip during
+          # normal operation, and we don't want that to trigger a restart.
+          livenessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
           readinessProbe:
             exec:
               command: ["rpk", "cluster", "health"]
@@ -43,7 +52,14 @@ spec:
           volumeMounts:
             - name: redpanda-data
               mountPath: /var/lib/redpanda/data
-      volumes:
-        - name: redpanda-data
-          persistentVolumeClaim:
-            claimName: redpanda-data
+  # volumeClaimTemplates gives each replica its own PVC (redpanda-data-redpanda-0),
+  # the StatefulSet-native way to provision storage — replaces the standalone PVC.
+  volumeClaimTemplates:
+    - metadata:
+        name: redpanda-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi

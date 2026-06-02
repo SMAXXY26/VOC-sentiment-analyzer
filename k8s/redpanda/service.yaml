@@ -4,6 +4,12 @@ metadata:
   name: redpanda
   namespace: cx-pipeline
 spec:
+  # Headless: governing service for the StatefulSet. clusterIP: None makes the
+  # `redpanda` DNS name resolve directly to pod IPs and enables the stable
+  # per-pod record redpanda-0.redpanda.cx-pipeline.svc.cluster.local — which is
+  # what `--advertise-kafka-addr PLAINTEXT://redpanda:9092` relies on so
+  # in-cluster Kafka clients can reach the broker.
+  clusterIP: None
   selector:
     app: redpanda
   ports:

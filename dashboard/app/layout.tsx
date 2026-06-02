@@ -10,9 +10,11 @@ export const metadata = { title: "CX Analyzer", description: "Customer Experienc
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={inter.variable}>
-      <body className="bg-[#060b18] text-slate-100 min-h-screen">
-        <Nav />
-        <main className="pt-20 px-4 pb-10 max-w-[1600px] mx-auto">{children}</main>
+      <body className="bg-[#060b18] text-slate-100 h-screen overflow-hidden">
+        <div className="flex h-screen">
+          <Nav />
+          <main className="flex-1 min-w-0 h-screen overflow-y-auto px-4 py-4">{children}</main>
+        </div>
         <ChatWidget />
       </body>
     </html>

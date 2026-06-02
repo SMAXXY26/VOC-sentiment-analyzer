@@ -10,7 +10,7 @@ chat():                   routes query to draft (1.5B) or target (7B) LLM,
 EOC (end_conversation):   stores conversation summary to Qdrant, cleans up session.
 
 Token budget (max_model_len=1024):
-  system ~70 | tools ~220 | history ≤250 | tool results ≤280 chars | response ≤180
+  system ~70 | tools ~220 | history ≤250 | tool results ≤280 chars | response ≤170
 """
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ def _get_graph():
             if isinstance(msg, HumanMessage):
                 last_user = str(msg.content)
                 break
-        llm = get_chat_llm(last_user, temperature=0.3).bind_tools(TOOLS).bind(max_tokens=180)
+        llm = get_chat_llm(last_user, temperature=0.3).bind_tools(TOOLS).bind(max_tokens=170)
         return {"messages": [llm.invoke(state["messages"])]}
 
     def should_continue(state: AgentState) -> str:

@@ -39,7 +39,7 @@ def classify_complexity(query: str) -> str:
 @lru_cache(maxsize=4)
 def _draft_llm(temperature: float) -> ChatOpenAI:
     return ChatOpenAI(
-        model="Qwen/Qwen2.5-1.5B-Instruct",
+        model="Qwen/Qwen2.5-1.5B-Instruct-AWQ",
         base_url=f"{DRAFT_LLM_URL}/v1" if not DRAFT_LLM_URL.endswith("/v1") else DRAFT_LLM_URL,
         api_key="dummy",
         temperature=temperature,

@@ -324,6 +324,151 @@ async fn call_analyzer_with_retry(
     Err(last_err)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use feedback_gateway::models::FeedbackPayload;
+    use serde_json::json;
+    use std::sync::LazyLock;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    // Serialise all env-var tests so parallel test threads don't race on process env.
+    static ENV_LOCK: LazyLock<std::sync::Mutex<()>> = LazyLock::new(|| std::sync::Mutex::new(()));
+
+    fn make_job() -> AnalysisJob {
+        AnalysisJob {
+            schema_version: SCHEMA_VERSION,
+            feedback_id: "test-id-1".into(),
+            payload: FeedbackPayload {
+                id: "test-id-1".into(),
+                text: "Product is excellent".into(),
+                source: "csv".into(),
+                rating: None,
+                submitted_at: None,
+                metadata: json!({}),
+            },
+            enqueued_at: 0,
+        }
+    }
+
+    // --- Config::from_env tests ---
+
+    #[test]
+    fn test_config_defaults() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        for var in &["KAFKA_BROKERS","KAFKA_RAW_TOPIC","KAFKA_ANALYZED_TOPIC",
+                      "KAFKA_FAILED_TOPIC","ANALYZER_URL","KAFKA_GROUP_ID","MAX_CONCURRENT"] {
+            std::env::remove_var(var);
+        }
+        let cfg = Config::from_env();
+        assert_eq!(cfg.brokers, "localhost:9092");
+        assert_eq!(cfg.raw_topic, "feedback.raw");
+        assert_eq!(cfg.analyzed_topic, "feedback.analyzed");
+        assert_eq!(cfg.failed_topic, "feedback.failed");
+        assert_eq!(cfg.analyzer_url, "http://localhost:8080/analyze");
+        assert_eq!(cfg.group_id, "cx-analyzer-group");
+        assert_eq!(cfg.max_concurrent, 4);
+    }
+
+    #[test]
+    fn test_config_max_concurrent_custom() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        std::env::set_var("MAX_CONCURRENT", "16");
+        let cfg = Config::from_env();
+        assert_eq!(cfg.max_concurrent, 16);
+        std::env::remove_var("MAX_CONCURRENT");
+    }
+
+    #[test]
+    fn test_config_max_concurrent_invalid_falls_back_to_default() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        std::env::set_var("MAX_CONCURRENT", "not-a-number");
+        let cfg = Config::from_env();
+        assert_eq!(cfg.max_concurrent, 4);
+        std::env::remove_var("MAX_CONCURRENT");
+    }
+
+    // --- call_analyzer_with_retry tests ---
+
+    #[tokio::test]
+    async fn test_analyzer_success_on_first_attempt() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/analyze"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({"sentiment": "positive", "score": 0.95})),
+            )
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let url = format!("{}/analyze", server.uri());
+        let result = call_analyzer_with_retry(&http, &url, &make_job()).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap()["sentiment"], "positive");
+    }
+
+    #[tokio::test]
+    async fn test_analyzer_retries_on_500_then_succeeds() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/analyze"))
+            .respond_with(ResponseTemplate::new(500))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/analyze"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({"sentiment": "neutral"})),
+            )
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let url = format!("{}/analyze", server.uri());
+        let result = call_analyzer_with_retry(&http, &url, &make_job()).await;
+
+        assert!(result.is_ok(), "expected Ok after retry, got {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_analyzer_exhausts_all_retries_returns_err() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/analyze"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&server)
+            .await;
+
+        let http = Client::new();
+        let url = format!("{}/analyze", server.uri());
+        let result = call_analyzer_with_retry(&http, &url, &make_job()).await;
+
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().contains("503"),
+            "error should mention the HTTP status"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_analyzer_connection_refused_returns_err() {
+        // Nothing listening on this port — all 3 attempts fail immediately.
+        let http = Client::builder()
+            .timeout(Duration::from_secs(2))
+            .build()
+            .unwrap();
+        let result =
+            call_analyzer_with_retry(&http, "http://127.0.0.1:19753/analyze", &make_job()).await;
+
+        assert!(result.is_err(), "connection refused should produce Err");
+    }
+}
+
 /// Publish a failed message to the dead-letter topic.
 async fn send_to_dlt(
     producer: &FutureProducer,
