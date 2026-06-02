@@ -8,22 +8,86 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use metrics::{counter, histogram};
+use metrics::{counter, gauge, histogram};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use rdkafka::{
     producer::{FutureProducer, FutureRecord},
     ClientConfig,
 };
+use tokio::sync::RwLock;
 use tower::limit::ConcurrencyLimitLayer;
 use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
-use tracing::info;
+use tracing::{info, warn};
 use uuid::Uuid;
 
-use feedback_gateway::models::{unix_now, AnalysisJob, FeedbackPayload, QueueResponse, SCHEMA_VERSION};
+use feedback_gateway::models::{
+    unix_now, AnalysisJob, FeedbackPayload, QueueResponse, SCHEMA_VERSION,
+};
+
+mod routing {
+    //! Query-complexity classifier — ported from analyzer/chatbot/cascade_llm.py
+    //! (`classify_complexity` + `_COMPLEX_SIGNALS`). Moving it to the producer lets
+    //! the gateway tag each job's target_model BEFORE it enters Kafka, so the
+    //! analyzer doesn't have to re-classify.
+
+    /// Keywords signalling the query needs the full 7B model's reasoning.
+    const COMPLEX_SIGNALS: &[&str] = &[
+        "why",
+        "explain",
+        "issue",
+        "complaint",
+        "escalate",
+        "broken",
+        "damaged",
+        "refund",
+        "wrong",
+        "missing",
+        "urgent",
+        "angry",
+        "terrible",
+        "worst",
+        "disappointed",
+        "frustrated",
+        "lost",
+        "never",
+        "impossible",
+        "unacceptable",
+        "legal",
+        "manager",
+        "lawsuit",
+        "charged",
+        "overcharged",
+        "fraud",
+    ];
+
+    /// "big" for complex/emotional or long text, "small" otherwise.
+    pub fn classify(text: &str) -> &'static str {
+        let lower = text.to_lowercase();
+        let words: Vec<&str> = lower.split_whitespace().collect();
+        let has_signal = words.iter().any(|w| COMPLEX_SIGNALS.contains(w));
+        if words.len() > 20 || has_signal {
+            "big"
+        } else {
+            "small"
+        }
+    }
+}
+
+/// Health snapshot of the inference fleet, refreshed by a background task.
+#[derive(Clone, Default)]
+struct FleetHealth {
+    analyzer_ok: bool,
+    big_ok: bool,   // Qwen-7B vLLM endpoint
+    small_ok: bool, // 1.5B draft endpoint
+    checked_at: u64,
+}
 
 struct AppState {
     producer: FutureProducer,
     topic: String,
+    health: Arc<RwLock<FleetHealth>>,
+    /// If the classifier picks "small" but the draft endpoint is down, fall back to "big".
+    draft_configured: bool,
 }
 
 #[tokio::main]
@@ -63,10 +127,40 @@ async fn main() {
 
     info!("Producer connected to Kafka at {brokers}");
 
-    let state = Arc::new(AppState { producer, topic });
+    // Inference-fleet health checks (HTTP probes — no k8s API / RBAC needed).
+    let analyzer_health = std::env::var("ANALYZER_HEALTH_URL")
+        .unwrap_or_else(|_| "http://analyzer:8080/ready".into());
+    let big_health =
+        std::env::var("VLLM_HEALTH_URL").unwrap_or_else(|_| "http://vllm:8000/health".into());
+    let draft_url = std::env::var("DRAFT_LLM_URL").unwrap_or_default();
+    let draft_configured = !draft_url.trim().is_empty();
+    let small_health = if draft_configured {
+        Some(format!(
+            "{}/health",
+            draft_url.trim_end_matches('/').trim_end_matches("/v1")
+        ))
+    } else {
+        None
+    };
+
+    let health = Arc::new(RwLock::new(FleetHealth::default()));
+    spawn_health_checker(
+        Arc::clone(&health),
+        analyzer_health,
+        big_health,
+        small_health,
+    );
+
+    let state = Arc::new(AppState {
+        producer,
+        topic,
+        health,
+        draft_configured,
+    });
 
     let app = Router::new()
-        .route("/health", get(health))
+        .route("/health", get(health_handler))
+        .route("/fleet", get(fleet_handler))
         .route("/feedback", post(submit_feedback))
         .route("/feedback/batch", post(submit_batch))
         .layer(TraceLayer::new_for_http())
@@ -97,8 +191,84 @@ async fn shutdown_signal() {
     }
 }
 
-async fn health() -> Json<serde_json::Value> {
+async fn health_handler() -> Json<serde_json::Value> {
     Json(serde_json::json!({"status": "ok"}))
+}
+
+/// Report the last fleet-health snapshot (analyzer + both inference endpoints).
+async fn fleet_handler(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+    let h = state.health.read().await;
+    Json(serde_json::json!({
+        "analyzer_ok": h.analyzer_ok,
+        "big_ok":      h.big_ok,
+        "small_ok":    h.small_ok,
+        "checked_at":  h.checked_at,
+    }))
+}
+
+/// Pick the target model for a piece of text, applying a health-aware fallback:
+/// "small" downgrades to "big" when the draft endpoint is absent or unhealthy.
+async fn choose_model(state: &AppState, text: &str) -> &'static str {
+    let mut model = routing::classify(text);
+    if model == "small" {
+        let small_up = state.draft_configured && state.health.read().await.small_ok;
+        if !small_up {
+            model = "big";
+            counter!("producer_model_fallback_total", "from" => "small", "to" => "big")
+                .increment(1);
+        }
+    }
+    counter!("producer_model_routed_total", "model" => model).increment(1);
+    model
+}
+
+/// Background task: probe analyzer + inference endpoints every 5s and update the
+/// shared FleetHealth snapshot + Prometheus gauges. Never panics — a down endpoint
+/// just flips its flag to false.
+fn spawn_health_checker(
+    health: Arc<RwLock<FleetHealth>>,
+    analyzer_url: String,
+    big_url: String,
+    small_url: Option<String>,
+) {
+    tokio::spawn(async move {
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(2))
+            .build()
+            .expect("failed to build health-check client");
+
+        async fn probe(client: &reqwest::Client, url: &str) -> bool {
+            matches!(client.get(url).send().await, Ok(r) if r.status().is_success())
+        }
+
+        loop {
+            let analyzer_ok = probe(&client, &analyzer_url).await;
+            let big_ok = probe(&client, &big_url).await;
+            let small_ok = match &small_url {
+                Some(u) => probe(&client, u).await,
+                None => false,
+            };
+
+            gauge!("producer_fleet_healthy", "component" => "analyzer")
+                .set(analyzer_ok as i32 as f64);
+            gauge!("producer_fleet_healthy", "component" => "big").set(big_ok as i32 as f64);
+            gauge!("producer_fleet_healthy", "component" => "small").set(small_ok as i32 as f64);
+
+            if !big_ok {
+                warn!("Big (Qwen-7B) inference endpoint is unhealthy");
+            }
+
+            {
+                let mut h = health.write().await;
+                h.analyzer_ok = analyzer_ok;
+                h.big_ok = big_ok;
+                h.small_ok = small_ok;
+                h.checked_at = unix_now();
+            }
+
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        }
+    });
 }
 
 async fn submit_feedback(
@@ -118,16 +288,17 @@ async fn submit_feedback(
     }
 
     let feedback_id = payload.id.clone();
+    let target_model = choose_model(&state, &payload.text).await;
     let job = AnalysisJob {
         schema_version: SCHEMA_VERSION,
         feedback_id: feedback_id.clone(),
         payload,
         enqueued_at: unix_now(),
+        target_model: Some(target_model.to_string()),
     };
 
-    publish(&state, &job).await.map_err(|e| {
+    publish(&state, &job).await.inspect_err(|_| {
         counter!("producer_errors_total", "reason" => "kafka_publish").increment(1);
-        e
     })?;
 
     counter!("producer_feedback_queued_total").increment(1);
@@ -165,15 +336,16 @@ async fn submit_batch(
             payload.id = Uuid::new_v4().to_string();
         }
         let feedback_id = payload.id.clone();
+        let target_model = choose_model(&state, &payload.text).await;
         let job = AnalysisJob {
             schema_version: SCHEMA_VERSION,
             feedback_id: feedback_id.clone(),
             payload,
             enqueued_at: unix_now(),
+            target_model: Some(target_model.to_string()),
         };
-        publish(&state, &job).await.map_err(|e| {
+        publish(&state, &job).await.inspect_err(|_| {
             counter!("producer_errors_total", "reason" => "kafka_publish").increment(1);
-            e
         })?;
         ids.push(feedback_id);
     }
@@ -208,4 +380,31 @@ async fn publish(state: &AppState, job: &AnalysisJob) -> Result<(), (StatusCode,
             )
         })?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::routing::classify;
+
+    #[test]
+    fn short_neutral_text_routes_small() {
+        assert_eq!(classify("great service thanks"), "small");
+    }
+
+    #[test]
+    fn complex_signal_routes_big() {
+        assert_eq!(classify("I want a refund now"), "big");
+        assert_eq!(classify("this is unacceptable"), "big");
+    }
+
+    #[test]
+    fn long_text_routes_big_even_without_signal() {
+        let long = "word ".repeat(25);
+        assert_eq!(classify(&long), "big");
+    }
+
+    #[test]
+    fn classification_is_case_insensitive() {
+        assert_eq!(classify("REFUND please"), "big");
+    }
 }

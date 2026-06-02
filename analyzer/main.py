@@ -11,7 +11,9 @@ from .schemas import FeedbackAnalysis
 console = Console()
 
 
-def analyze_single(raw_text: str, feedback_id: str | None = None) -> FeedbackAnalysis:
+def analyze_single(
+    raw_text: str, feedback_id: str | None = None, model: str | None = None
+) -> FeedbackAnalysis:
     # Short-circuit: check for duplicate BEFORE running the expensive LLM pipeline.
     # Previously this check ran after pipeline.invoke(), so all 10 LLM stages fired
     # regardless, and FeedbackAnalysis(**hits[0]["analysis"]) always raised KeyError
@@ -29,7 +31,14 @@ def analyze_single(raw_text: str, feedback_id: str | None = None) -> FeedbackAna
         pass  # never block if Qdrant is unavailable
 
     fid = feedback_id or str(uuid.uuid4())
-    ctx = pipeline.invoke({"raw_text": raw_text, "feedback_id": fid})
+
+    # Apply the producer's model routing hint for the whole pipeline run, then reset.
+    from .llm import set_target_model, reset_target_model
+    token = set_target_model(model)
+    try:
+        ctx = pipeline.invoke({"raw_text": raw_text, "feedback_id": fid})
+    finally:
+        reset_target_model(token)
     result = FeedbackAnalysis(
         normalized=ctx["normalized"],
         redacted=ctx["redacted"],

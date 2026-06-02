@@ -33,10 +33,8 @@ struct Config {
 impl Config {
     fn from_env() -> Self {
         Self {
-            brokers: std::env::var("KAFKA_BROKERS")
-                .unwrap_or_else(|_| "localhost:9092".into()),
-            raw_topic: std::env::var("KAFKA_RAW_TOPIC")
-                .unwrap_or_else(|_| "feedback.raw".into()),
+            brokers: std::env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".into()),
+            raw_topic: std::env::var("KAFKA_RAW_TOPIC").unwrap_or_else(|_| "feedback.raw".into()),
             analyzed_topic: std::env::var("KAFKA_ANALYZED_TOPIC")
                 .unwrap_or_else(|_| "feedback.analyzed".into()),
             failed_topic: std::env::var("KAFKA_FAILED_TOPIC")
@@ -209,6 +207,10 @@ async fn main() {
     };
 }
 
+// Offset coordinates (topic/partition/offset) are passed individually because the
+// borrow checker forces extracting them before `msg` is moved; grouping into a struct
+// adds no clarity here.
+#[allow(clippy::too_many_arguments)]
 async fn process_job(
     job: AnalysisJob,
     raw_payload: String,
@@ -232,8 +234,16 @@ async fn process_job(
     match analysis {
         Err(reason) => {
             error!(feedback_id = %job.feedback_id, reason = %reason, "Analysis failed after retries — sending to DLT");
-            counter!("consumer_analyzer_errors_total", "reason" => "exhausted_retries").increment(1);
-            send_to_dlt(producer, &config.failed_topic, &job.feedback_id, &reason, &raw_payload).await;
+            counter!("consumer_analyzer_errors_total", "reason" => "exhausted_retries")
+                .increment(1);
+            send_to_dlt(
+                producer,
+                &config.failed_topic,
+                &job.feedback_id,
+                &reason,
+                &raw_payload,
+            )
+            .await;
             // Store offset only after DLT send — message is handled, not lost
             consumer.store_offset(topic, partition, offset).ok();
         }
@@ -262,8 +272,14 @@ async fn process_job(
                 Err((e, _)) => {
                     error!(feedback_id = %job.feedback_id, "Failed to publish result: {e} — sending to DLT");
                     counter!("consumer_publish_errors_total").increment(1);
-                    send_to_dlt(producer, &config.failed_topic, &job.feedback_id,
-                        &format!("publish_failed: {e}"), &raw_payload).await;
+                    send_to_dlt(
+                        producer,
+                        &config.failed_topic,
+                        &job.feedback_id,
+                        &format!("publish_failed: {e}"),
+                        &raw_payload,
+                    )
+                    .await;
                     // Store offset after DLT send — consistent with analysis-failure path
                     consumer.store_offset(topic, partition, offset).ok();
                 }
@@ -301,14 +317,22 @@ async fn call_analyzer_with_retry(
             tokio::time::sleep(delay).await;
         }
 
+        // Forward the producer's model routing hint (big/small) to the analyzer.
+        // Omitted (null) when absent so the analyzer uses its default model.
         match http
             .post(url)
-            .json(&serde_json::json!({ "text": job.payload.text }))
+            .json(&serde_json::json!({
+                "text": job.payload.text,
+                "model": job.target_model,
+            }))
             .send()
             .await
         {
             Ok(resp) if resp.status().is_success() => {
-                return resp.json::<serde_json::Value>().await.map_err(|e| e.to_string());
+                return resp
+                    .json::<serde_json::Value>()
+                    .await
+                    .map_err(|e| e.to_string());
             }
             Ok(resp) => {
                 last_err = format!("http_status_{}", resp.status().as_u16());
@@ -324,6 +348,9 @@ async fn call_analyzer_with_retry(
     Err(last_err)
 }
 
+// send_to_dlt is defined after this test module for readability (it's a leaf helper);
+// the lint that flags this is purely stylistic.
+#[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -349,6 +376,7 @@ mod tests {
                 metadata: json!({}),
             },
             enqueued_at: 0,
+            target_model: Some("big".into()),
         }
     }
 
@@ -357,8 +385,15 @@ mod tests {
     #[test]
     fn test_config_defaults() {
         let _guard = ENV_LOCK.lock().unwrap();
-        for var in &["KAFKA_BROKERS","KAFKA_RAW_TOPIC","KAFKA_ANALYZED_TOPIC",
-                      "KAFKA_FAILED_TOPIC","ANALYZER_URL","KAFKA_GROUP_ID","MAX_CONCURRENT"] {
+        for var in &[
+            "KAFKA_BROKERS",
+            "KAFKA_RAW_TOPIC",
+            "KAFKA_ANALYZED_TOPIC",
+            "KAFKA_FAILED_TOPIC",
+            "ANALYZER_URL",
+            "KAFKA_GROUP_ID",
+            "MAX_CONCURRENT",
+        ] {
             std::env::remove_var(var);
         }
         let cfg = Config::from_env();
@@ -422,9 +457,7 @@ mod tests {
             .await;
         Mock::given(method("POST"))
             .and(path("/analyze"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(json!({"sentiment": "neutral"})),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"sentiment": "neutral"})))
             .mount(&server)
             .await;
 

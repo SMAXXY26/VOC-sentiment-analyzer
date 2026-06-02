@@ -15,28 +15,44 @@ def _store(ctx: dict) -> dict:
         )
         return ctx
 
+    # Build the analysis object outside the Qdrant try so a store failure can
+    # still buffer it for retry (analysis is complete; only the write failed).
+    analysis = FeedbackAnalysis(
+        normalized=ctx["normalized"],
+        redacted=ctx["redacted"],
+        enrichment=ctx["enrichment"],
+        taxonomy=ctx["taxonomy"],
+        sentiment=ctx["sentiment"],
+        signals=ctx["signals"],
+        risk=ctx["risk"],
+        executive=ctx["executive"],
+        pipeline_confidence=ctx.get("pipeline_confidence"),
+        needs_review=ctx.get("needs_review"),
+    )
+    raw_text = ctx["normalized"].original
+    source = ctx.get("source", "unknown")
+
     try:
         from vectordb.store import store_analysis
-        analysis = FeedbackAnalysis(
-            normalized=ctx["normalized"],
-            redacted=ctx["redacted"],
-            enrichment=ctx["enrichment"],
-            taxonomy=ctx["taxonomy"],
-            sentiment=ctx["sentiment"],
-            signals=ctx["signals"],
-            risk=ctx["risk"],
-            executive=ctx["executive"],
-            pipeline_confidence=ctx.get("pipeline_confidence"),
-            needs_review=ctx.get("needs_review"),
-        )
         store_analysis(
             feedback_id=feedback_id,
-            raw_text=ctx["normalized"].original,
+            raw_text=raw_text,
             analysis=analysis,
-            source=ctx.get("source", "unknown"),
+            source=source,
         )
+        # Qdrant is reachable — opportunistically replay anything buffered earlier.
+        try:
+            from .store_buffer import flush_store_buffer
+            flush_store_buffer()
+        except Exception:
+            pass
     except Exception:
-        pass  # never block pipeline if vector DB is unavailable
+        # Qdrant unavailable: don't lose the analysis — buffer it for later replay.
+        try:
+            from .store_buffer import buffer_failed_store
+            buffer_failed_store(feedback_id, raw_text, analysis, source)
+        except Exception:
+            pass  # never block the pipeline
     return ctx
 
 

@@ -21,6 +21,12 @@ pub struct AnalysisJob {
     pub feedback_id: String,
     pub payload: FeedbackPayload,
     pub enqueued_at: u64, // epoch seconds
+    /// Producer-side model routing hint: "big" (Qwen-7B) or "small" (1.5B draft).
+    /// Optional + defaulted so it's backward-compatible — jobs written by an older
+    /// producer deserialize as None and the analyzer falls back to its default model.
+    /// No SCHEMA_VERSION bump needed (the consumer would otherwise DLT old jobs).
+    #[serde(default)]
+    pub target_model: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -91,10 +97,12 @@ mod tests {
                 metadata: json!({"region": "us-east"}),
             },
             enqueued_at: 1_700_000_000,
+            target_model: Some("big".into()),
         };
 
         let serialized = serde_json::to_string(&job).unwrap();
         let got: AnalysisJob = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(got.target_model.as_deref(), Some("big"));
 
         assert_eq!(got.feedback_id, "abc-123");
         assert_eq!(got.schema_version, SCHEMA_VERSION);
