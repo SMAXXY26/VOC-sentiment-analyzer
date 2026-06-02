@@ -25,3 +25,4 @@ psutil
 pynvml
 duckduckgo-search
 bcrypt
+prometheus-client

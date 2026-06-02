@@ -25,3 +25,4 @@ dependencies:
       - httpx
       - rich
       - langdetect
+      - prometheus-client

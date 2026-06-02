@@ -10,3 +10,9 @@ scrape_configs:
   - job_name: cx_consumer
     static_configs:
       - targets: ["consumer:9002"]
+
+  # Python analyzer pipeline metrics (stage/request latency, dedup cache hit ratio).
+  - job_name: cx_analyzer
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["analyzer:8080"]
