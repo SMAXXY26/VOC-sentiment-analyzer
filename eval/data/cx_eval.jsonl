@@ -1,0 +1,16 @@
+{"text": "I was charged twice for the same order and no one will respond to my emails.", "category": "Billing", "sentiment": "negative", "escalate": true}
+{"text": "How do I update the credit card on file for my subscription?", "category": "Billing", "sentiment": "neutral", "escalate": false}
+{"text": "The headphones stopped working after three days, the left ear is completely dead.", "category": "Product", "sentiment": "negative", "escalate": false}
+{"text": "Honestly the build quality is fantastic, best purchase I've made all year.", "category": "Product", "sentiment": "positive", "escalate": false}
+{"text": "Your support agent was incredibly patient and solved my issue in five minutes.", "category": "Support", "sentiment": "positive", "escalate": false}
+{"text": "I've been on hold for two hours and got hung up on twice. This is unacceptable.", "category": "Support", "sentiment": "negative", "escalate": true}
+{"text": "My package says delivered but it never arrived at my address.", "category": "Shipping", "sentiment": "negative", "escalate": false}
+{"text": "Can you tell me the estimated delivery date for order 48213?", "category": "Shipping", "sentiment": "neutral", "escalate": false}
+{"text": "Shipping took three weeks longer than promised and the box was crushed.", "category": "Shipping", "sentiment": "negative", "escalate": false}
+{"text": "I can't log into my account, the password reset email never arrives.", "category": "Account", "sentiment": "negative", "escalate": false}
+{"text": "Please close my account and delete all of my personal data permanently.", "category": "Account", "sentiment": "negative", "escalate": true}
+{"text": "The setup wizard was confusing and I gave up halfway through onboarding.", "category": "Onboarding", "sentiment": "negative", "escalate": false}
+{"text": "Loved how quick it was to get started, the tutorial walked me through everything.", "category": "Onboarding", "sentiment": "positive", "escalate": false}
+{"text": "I'm fine, I just want to cancel my plan before the next billing cycle.", "category": "Billing", "sentiment": "neutral", "escalate": false}
+{"text": "This is the third defective unit you've sent me. I'm contacting my lawyer.", "category": "Product", "sentiment": "negative", "escalate": true}
+{"text": "Just confirming the warranty covers accidental damage, is that right?", "category": "Support", "sentiment": "neutral", "escalate": false}
