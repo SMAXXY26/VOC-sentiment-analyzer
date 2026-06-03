@@ -60,6 +60,9 @@ spec:
             - name: config
               mountPath: /etc/prometheus/prometheus.yml
               subPath: prometheus.yml
+            - name: config
+              mountPath: /etc/prometheus/alerts.yml
+              subPath: alerts.yml
           resources:
             limits:
               memory: "512Mi"
@@ -82,6 +85,8 @@ data:
     global:
       scrape_interval: 10s
       evaluation_interval: 10s
+    rule_files:
+      - /etc/prometheus/alerts.yml
     scrape_configs:
       # Scrape every pod in cx-pipeline that opts in with prometheus.io/scrape: "true".
       # prometheus.io/port selects the metrics port; prometheus.io/path the path.
@@ -116,6 +121,48 @@ data:
       - job_name: vllm
         static_configs:
           - targets: ["vllm:8000"]
+  # Alerting/recording rules (kept in sync with monitoring/alerts.yml). The DLT alerts
+  # are what stop feedback.failed from being a silent black hole.
+  alerts.yml: |
+    groups:
+      - name: cx_pipeline_alerts
+        rules:
+          - alert: DeadLetterMessages
+            expr: increase(consumer_dlt_messages_total[5m]) > 0
+            for: 1m
+            labels: { severity: warning }
+            annotations:
+              summary: "Messages are landing in the dead-letter topic"
+          - alert: DeadLetterFlood
+            expr: rate(consumer_dlt_messages_total[5m]) > 1
+            for: 5m
+            labels: { severity: critical }
+            annotations:
+              summary: "Sustained dead-letter flood (>1/s for 5m)"
+          - alert: DeadLetterSendFailures
+            expr: increase(consumer_dlt_failures_total[10m]) > 0
+            for: 1m
+            labels: { severity: critical }
+            annotations:
+              summary: "Failed to write to the dead-letter topic (message lost)"
+          - alert: StoreRetryBacklog
+            expr: store_retry_pending > 50
+            for: 10m
+            labels: { severity: warning }
+            annotations:
+              summary: "Qdrant store-retry backlog is growing"
+          - alert: InferenceBackendUnhealthy
+            expr: producer_fleet_healthy{component="big"} == 0
+            for: 2m
+            labels: { severity: critical }
+            annotations:
+              summary: "Big (Qwen-7B) inference backend is unhealthy"
+          - alert: vLLMHighTTFT
+            expr: histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket[5m])) > 2
+            for: 5m
+            labels: { severity: warning }
+            annotations:
+              summary: "vLLM TTFT p95 above 2s — inference is queueing"
 ---
 apiVersion: v1
 kind: Service

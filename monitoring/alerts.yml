@@ -1,0 +1,53 @@
+groups:
+  - name: cx_pipeline_alerts
+    rules:
+      # The dead-letter topic is no longer a silent black hole: alert when failures
+      # flow into it, and (louder) when they're sustained.
+      - alert: DeadLetterMessages
+        expr: increase(consumer_dlt_messages_total[5m]) > 0
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "Messages are landing in the dead-letter topic"
+          description: "{{ $value }} messages hit feedback.failed in the last 5m. Inspect with the dlt_replay tool."
+
+      - alert: DeadLetterFlood
+        expr: rate(consumer_dlt_messages_total[5m]) > 1
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Sustained dead-letter flood (>1/s for 5m)"
+          description: "feedback.failed is filling fast — the analyzer or a downstream dep is likely down."
+
+      # A failed DLT *send* means we genuinely lost a message — always critical.
+      - alert: DeadLetterSendFailures
+        expr: increase(consumer_dlt_failures_total[10m]) > 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Failed to write to the dead-letter topic (message lost)"
+
+      # The Qdrant store-retry buffer should drain; a growing backlog means Qdrant
+      # is down or the retry consumer is stuck.
+      - alert: StoreRetryBacklog
+        expr: store_retry_pending > 50
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Qdrant store-retry backlog is growing"
+          description: "{{ $value }} analyses are buffered awaiting Qdrant — check Qdrant and the retry consumer."
+
+      # Inference fleet health (producer probes) and analyzer readiness.
+      - alert: InferenceBackendUnhealthy
+        expr: producer_fleet_healthy{component="big"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Big (Qwen-7B) inference backend is unhealthy"
+
+      - alert: vLLMHighTTFT
+        expr: histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket[5m])) > 2
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "vLLM TTFT p95 above 2s — inference is queueing"
