@@ -107,6 +107,15 @@ data:
             target_label: app
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: pod
+
+      # vLLM runs off-cluster (dev laptop), reached via the headless vllm Service.
+      # Its /metrics is the gold standard for inference: vllm:time_to_first_token_seconds,
+      # vllm:time_per_output_token_seconds, vllm:gpu_prefix_cache_hit_rate (← the win
+      # the semantic scheduler targets), vllm:gpu_cache_usage_perc, num_requests_running/
+      # waiting, num_preemptions_total, prompt/generation_tokens_total.
+      - job_name: vllm
+        static_configs:
+          - targets: ["vllm:8000"]
 ---
 apiVersion: v1
 kind: Service

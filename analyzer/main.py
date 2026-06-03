@@ -21,6 +21,10 @@ def analyze_single(
     from .metrics import (
         DEDUP_CACHE_HITS,
         DEDUP_CACHE_MISSES,
+        LLM_CALLS_SAVED_TOTAL,
+        LLM_STAGES,
+        NEEDS_REVIEW_TOTAL,
+        PIPELINE_CONFIDENCE,
         PIPELINE_REQUEST_DURATION,
     )
 
@@ -40,6 +44,8 @@ def analyze_single(
             cached = get_analysis_by_id(matches[0])
             if cached:
                 DEDUP_CACHE_HITS.inc()
+                # Each hit skips the whole LLM section — quantify the GPU work avoided.
+                LLM_CALLS_SAVED_TOTAL.inc(LLM_STAGES)
                 PIPELINE_REQUEST_DURATION.labels(outcome="cache_hit").observe(
                     time.perf_counter() - req_start
                 )
@@ -72,8 +78,13 @@ def analyze_single(
         needs_review=ctx.get("needs_review"),
     )
 
+    # Calibration / active-learning signals.
+    if result.pipeline_confidence is not None:
+        PIPELINE_CONFIDENCE.observe(result.pipeline_confidence)
+
     # Queue for active learning review if confidence_stage flagged it
     if result.needs_review:
+        NEEDS_REVIEW_TOTAL.inc()
         try:
             from analyzer.active_learning import enqueue
             enqueue(fid, result)

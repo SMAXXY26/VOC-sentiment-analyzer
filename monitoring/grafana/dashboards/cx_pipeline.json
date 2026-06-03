@@ -198,6 +198,74 @@
           "legendFormat": "{{stage}}"
         }
       ]
+    },
+    {
+      "id": 20,
+      "title": "── Research metrics: inference economics · cascade · calibration ──",
+      "type": "text",
+      "gridPos": { "x": 0, "y": 34, "w": 24, "h": 2 },
+      "options": { "content": "Token throughput, model-cascade split, the dedup GPU win, confidence calibration, and vLLM-native inference metrics (prefix cache, TTFT)." }
+    },
+    {
+      "id": 21,
+      "title": "Generated Tokens / sec (by model tier)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 36, "w": 8, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "none" } },
+      "targets": [
+        { "expr": "sum by (model) (rate(llm_completion_tokens_total[1m]))", "legendFormat": "{{model}} completion tok/s" },
+        { "expr": "sum by (model) (rate(llm_prompt_tokens_total[1m]))", "legendFormat": "{{model}} prompt tok/s" }
+      ]
+    },
+    {
+      "id": 22,
+      "title": "Model Cascade Split (calls/sec)",
+      "type": "timeseries",
+      "gridPos": { "x": 8, "y": 36, "w": 8, "h": 7 },
+      "targets": [
+        { "expr": "sum by (model) (rate(llm_calls_total[5m]))", "legendFormat": "{{model}}" }
+      ]
+    },
+    {
+      "id": 23,
+      "title": "LLM Calls Avoided by Dedup (cumulative)",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 36, "w": 8, "h": 7 },
+      "targets": [
+        { "expr": "llm_calls_saved_total", "legendFormat": "calls saved" }
+      ]
+    },
+    {
+      "id": 24,
+      "title": "Pipeline Confidence (p10 / p50 / p90)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 43, "w": 8, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } },
+      "targets": [
+        { "expr": "histogram_quantile(0.10, rate(pipeline_confidence_bucket[5m]))", "legendFormat": "p10" },
+        { "expr": "histogram_quantile(0.50, rate(pipeline_confidence_bucket[5m]))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.90, rate(pipeline_confidence_bucket[5m]))", "legendFormat": "p90" }
+      ]
+    },
+    {
+      "id": 25,
+      "title": "Needs-Review Rate (active learning)",
+      "type": "timeseries",
+      "gridPos": { "x": 8, "y": 43, "w": 8, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "percentunit" } },
+      "targets": [
+        { "expr": "rate(needs_review_total[5m]) / clamp_min(rate(dedup_cache_misses_total[5m]), 0.0001)", "legendFormat": "flagged fraction" }
+      ]
+    },
+    {
+      "id": 26,
+      "title": "vLLM: prefix-cache hit rate · TTFT p95",
+      "type": "timeseries",
+      "gridPos": { "x": 16, "y": 43, "w": 8, "h": 7 },
+      "targets": [
+        { "expr": "vllm:gpu_prefix_cache_hit_rate", "legendFormat": "prefix cache hit rate" },
+        { "expr": "histogram_quantile(0.95, rate(vllm:time_to_first_token_seconds_bucket[5m]))", "legendFormat": "TTFT p95 (s)" }
+      ]
     }
   ]
 }
