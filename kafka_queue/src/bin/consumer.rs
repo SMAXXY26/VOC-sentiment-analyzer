@@ -259,7 +259,25 @@ async fn process_job(
                 analyzed_at: unix_now(),
             };
 
-            let value = serde_json::to_string(&result).unwrap();
+            let value = match serde_json::to_string(&result) {
+                Ok(v) => v,
+                Err(e) => {
+                    // Serialization of our own result should never fail, but if it
+                    // does, don't panic the worker — DLT it and move on.
+                    error!(feedback_id = %job.feedback_id, "Failed to serialize result: {e}");
+                    counter!("consumer_serialize_errors_total").increment(1);
+                    send_to_dlt(
+                        producer,
+                        &config.failed_topic,
+                        &job.feedback_id,
+                        &format!("serialize_failed: {e}"),
+                        &raw_payload,
+                    )
+                    .await;
+                    consumer.store_offset(topic, partition, offset).ok();
+                    return;
+                }
+            };
             match producer
                 .send(
                     FutureRecord::to(&config.analyzed_topic)
@@ -516,7 +534,14 @@ async fn send_to_dlt(
         original_payload: original_payload.to_string(),
         failed_at: unix_now(),
     };
-    let value = serde_json::to_string(&dlt_msg).unwrap();
+    let value = match serde_json::to_string(&dlt_msg) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(feedback_id = %feedback_id, "CRITICAL: failed to serialize DLT message: {e}");
+            counter!("consumer_dlt_failures_total").increment(1);
+            return;
+        }
+    };
     match producer
         .send(
             FutureRecord::to(failed_topic)

@@ -25,12 +25,16 @@ use feedback_gateway::models::{
 };
 
 mod routing {
-    //! Query-complexity classifier — ported from analyzer/chatbot/cascade_llm.py
-    //! (`classify_complexity` + `_COMPLEX_SIGNALS`). Moving it to the producer lets
-    //! the gateway tag each job's target_model BEFORE it enters Kafka, so the
-    //! analyzer doesn't have to re-classify.
+    //! Cheap keyword pre-tag — a zero-latency, zero-dependency HINT attached at the
+    //! gateway so the Kafka message carries a default tier. It is NOT the authority:
+    //! the analyzer makes the real decision with a 1.5B model-based router
+    //! (analyzer/routing.py::resolve_model_tier), which reads intent rather than
+    //! surface words (e.g. "I'm fine, just want to cancel" → complex, no trigger word).
+    //! This keyword set mirrors analyzer/chatbot/cascade_llm.py::_COMPLEX_SIGNALS and is
+    //! kept in sync by tests/test_hardening.py::test_classifier_keyword_parity. The
+    //! analyzer falls back to this same logic only when the draft model is unavailable.
 
-    /// Keywords signalling the query needs the full 7B model's reasoning.
+    /// Keywords signalling the query likely needs the full 7B model's reasoning.
     const COMPLEX_SIGNALS: &[&str] = &[
         "why",
         "explain",
@@ -363,7 +367,14 @@ async fn submit_batch(
 }
 
 async fn publish(state: &AppState, job: &AnalysisJob) -> Result<(), (StatusCode, String)> {
-    let value = serde_json::to_string(job).unwrap();
+    // Don't panic the request handler if serialization ever fails — surface a 500.
+    let value = serde_json::to_string(job).map_err(|e| {
+        counter!("producer_errors_total", "reason" => "serialize").increment(1);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("failed to serialize job: {e}"),
+        )
+    })?;
     state
         .producer
         .send(
