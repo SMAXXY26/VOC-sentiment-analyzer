@@ -8,13 +8,14 @@ Pruning strategy: when over budget, drop the oldest user+assistant pair and
 fold their content into a one-line `summary` string that is prepended as a
 SystemMessage. This keeps the agent aware of early context without spending tokens.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Literal
 
-MAX_HISTORY_TOKENS = 250   # hard ceiling for conversation history
-MAX_MSG_CHARS = 400        # cap any single message before storing
+MAX_HISTORY_TOKENS = 250  # hard ceiling for conversation history
+MAX_MSG_CHARS = 400  # cap any single message before storing
 
 
 def _approx_tokens(text: str) -> int:
@@ -60,6 +61,7 @@ class ConversationMemory:
     def to_langchain_messages(self):
         """Convert to LangChain message objects for the agent."""
         from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
         out = []
         if self.summary:
             out.append(SystemMessage(content=self.summary))

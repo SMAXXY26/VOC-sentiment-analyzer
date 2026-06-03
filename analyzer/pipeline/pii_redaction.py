@@ -6,19 +6,20 @@ from langchain_core.runnables import RunnableLambda
 from ..schemas import RedactedFeedback
 
 _PATTERNS: list[tuple[str, str]] = [
-    ("EMAIL",       r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'),
-    ("PHONE",       r'\b(\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b'),
-    ("SSN",         r'\b\d{3}-\d{2}-\d{4}\b'),
+    ("EMAIL", r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
+    ("PHONE", r"\b(\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b"),
+    ("SSN", r"\b\d{3}-\d{2}-\d{4}\b"),
     # Require separator between every group — avoids false-positives on
     # long order/product IDs like 1234567890123456 (no spaces/dashes).
-    ("CREDIT_CARD", r'\b\d{4}[\s-]\d{4}[\s-]\d{4}[\s-]\d{4}\b'),
-    ("ZIP_CODE",    r'\b\d{5}(?:-\d{4})?\b'),
+    ("CREDIT_CARD", r"\b\d{4}[\s-]\d{4}[\s-]\d{4}[\s-]\d{4}\b"),
+    ("ZIP_CODE", r"\b\d{5}(?:-\d{4})?\b"),
 ]
 
 
 @lru_cache(maxsize=1)
 def _load_nlp():
     import spacy
+
     return spacy.load("en_core_web_sm")
 
 

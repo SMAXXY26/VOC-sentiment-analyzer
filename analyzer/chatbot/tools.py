@@ -6,6 +6,7 @@ LLM hallucinates a different customer_id.
 
 Tool outputs are kept ≤280 chars to stay within the 1024-token vLLM budget.
 """
+
 from __future__ import annotations
 
 import functools
@@ -55,8 +56,7 @@ def _guarded(max_calls: int | None = None, timeout: float | None = None):
             used = calls.get(fn.__name__, 0)
             if max_calls is not None and used >= max_calls:
                 return (
-                    f"(Skipped: '{fn.__name__}' already used {used}× this turn — "
-                    "answer from what you already have.)"
+                    f"(Skipped: '{fn.__name__}' already used {used}× this turn — answer from what you already have.)"
                 )[:280]
             calls[fn.__name__] = used + 1
 
@@ -77,14 +77,15 @@ def _guarded(max_calls: int | None = None, timeout: float | None = None):
 
     return decorator
 
+
 _FAQ: dict[str, str] = {
-    "cancel":        "Orders can be cancelled within 2 minutes of placing. Go to Orders → Cancel Order.",
-    "refund":        "Refunds take 3–5 business days to your original payment method.",
+    "cancel": "Orders can be cancelled within 2 minutes of placing. Go to Orders → Cancel Order.",
+    "refund": "Refunds take 3–5 business days to your original payment method.",
     "delivery_time": "Standard delivery: 30–45 min. Express: 15–20 min.",
-    "contact":       "Urgent? Call 1-800-SUPPORT or email support@example.com.",
-    "track":         "Track in real-time under Orders → Track Order.",
-    "payment":       "We accept cards, UPI, wallets, and cash on delivery.",
-    "missing_item":  "Report a missing item within 24 hours for a full refund or re-delivery.",
+    "contact": "Urgent? Call 1-800-SUPPORT or email support@example.com.",
+    "track": "Track in real-time under Orders → Track Order.",
+    "payment": "We accept cards, UPI, wallets, and cash on delivery.",
+    "missing_item": "Report a missing item within 24 hours for a full refund or re-delivery.",
     "late_delivery": "If your order is very late, we can refund the delivery fee or offer a coupon.",
 }
 
@@ -99,6 +100,7 @@ def _uid() -> int | None:
 
 # ── EDBMS-backed tools ─────────────────────────────────────────────────────────
 
+
 @tool
 @_guarded()
 def get_account_info() -> str:
@@ -107,6 +109,7 @@ def get_account_info() -> str:
     if not uid:
         return "Session error: customer not identified."
     from .edbms import get_account_info as _get
+
     info = _get(uid)
     if not info:
         return "No account info found."
@@ -121,6 +124,7 @@ def get_my_orders() -> str:
     if not uid:
         return "Session error: customer not identified."
     from .edbms import get_recent_purchases
+
     orders = get_recent_purchases(uid)
     if not orders:
         return "No recent purchases found."
@@ -141,6 +145,7 @@ def lookup_purchase_context(keywords: str) -> str:
     if not uid:
         return "Session error: customer not identified."
     from .edbms import get_recent_purchases
+
     orders = get_recent_purchases(uid, keywords=keywords)
     if not orders:
         return f"No purchases found matching '{keywords}'."
@@ -161,6 +166,7 @@ def log_complaint(order_ref: str, complaint_type: str, description: str) -> str:
     if not uid:
         return "Session error."
     from .edbms import create_ticket
+
     ticket_id = create_ticket(uid, f"complaint:{complaint_type}")
     return (
         f"Complaint logged (ticket {ticket_id}) for order {order_ref}. "
@@ -176,6 +182,7 @@ def request_refund(order_ref: str, reason: str) -> str:
     if not uid:
         return "Session error."
     from .edbms import create_ticket
+
     ticket_id = create_ticket(uid, "refund")
     return (
         f"Refund request submitted (ticket {ticket_id}) for order {order_ref}. "
@@ -191,6 +198,7 @@ def escalate_to_human(order_ref: str, reason: str) -> str:
     if not uid:
         return "Session error."
     from .edbms import create_ticket
+
     ticket_id = create_ticket(uid, "escalation:urgent")
     return (
         f"Case escalated to our support team (ticket {ticket_id}). "
@@ -216,6 +224,7 @@ def web_search(query: str) -> str:
     Use for questions about products, shipping policies, or anything not in the FAQ."""
     try:
         from langchain_community.tools import DuckDuckGoSearchRun
+
         result = DuckDuckGoSearchRun().run(query)
         return result[:280]
     except Exception as exc:

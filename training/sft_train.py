@@ -8,23 +8,23 @@ Usage:
     python training/sft_train.py --data training/data/sft.jsonl
     python training/sft_train.py --data training/data/sft.jsonl --max-steps 1  # dry run
 """
+
 import argparse
 import os
 
-BASE_MODEL   = "Qwen/Qwen2.5-7B-Instruct"
-OUTPUT_DIR   = "training/checkpoints/sft-adapter"
-MAX_SEQ_LEN  = 1024   # matches vLLM --max-model-len
+BASE_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+OUTPUT_DIR = "training/checkpoints/sft-adapter"
+MAX_SEQ_LEN = 1024  # matches vLLM --max-model-len
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data",       default="training/data/sft.jsonl")
-    parser.add_argument("--model",      default=BASE_MODEL)
+    parser.add_argument("--data", default="training/data/sft.jsonl")
+    parser.add_argument("--model", default=BASE_MODEL)
     parser.add_argument("--output-dir", default=OUTPUT_DIR)
-    parser.add_argument("--max-steps",  type=int, default=-1,
-                        help="Set to 1 for a dry-run smoke test")
-    parser.add_argument("--epochs",     type=int, default=3)
-    parser.add_argument("--lora-r",     type=int, default=16)
+    parser.add_argument("--max-steps", type=int, default=-1, help="Set to 1 for a dry-run smoke test")
+    parser.add_argument("--epochs", type=int, default=3)
+    parser.add_argument("--lora-r", type=int, default=16)
     parser.add_argument("--lora-alpha", type=int, default=32)
     args = parser.parse_args()
 
@@ -49,8 +49,13 @@ def main():
         lora_alpha=args.lora_alpha,
         lora_dropout=0.05,
         target_modules=[
-            "q_proj", "k_proj", "v_proj", "o_proj",
-            "gate_proj", "up_proj", "down_proj",
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
         ],
         bias="none",
         use_gradient_checkpointing="unsloth",
@@ -82,11 +87,11 @@ def main():
         num_train_epochs=args.epochs if args.max_steps == -1 else 1,
         max_steps=args.max_steps,
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=8,    # effective batch = 8
+        gradient_accumulation_steps=8,  # effective batch = 8
         warmup_ratio=0.05,
         learning_rate=2e-4,
         lr_scheduler_type="cosine",
-        fp16=not os.getenv("USE_BF16"),   # 4070 supports fp16 fine; bf16 also ok
+        fp16=not os.getenv("USE_BF16"),  # 4070 supports fp16 fine; bf16 also ok
         logging_steps=10,
         save_strategy="epoch",
         save_total_limit=2,

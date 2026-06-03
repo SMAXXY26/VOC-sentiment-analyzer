@@ -5,6 +5,7 @@ Complements vectordb/store.py (which handles pipeline-level reads/writes).
 This module provides richer query patterns: filtered search, time-window
 retrieval, batch get, and embedding export for clustering/drift analysis.
 """
+
 from __future__ import annotations
 
 import time
@@ -22,6 +23,7 @@ from .client import ANALYSES_COLLECTION, get_client
 from .embedder import embed
 
 # ── Filtered semantic search ───────────────────────────────────────────────────
+
 
 def filtered_search(
     query: str,
@@ -69,6 +71,7 @@ def filtered_search(
 
 # ── Time-window retrieval ─────────────────────────────────────────────────────
 
+
 def time_window_search(
     query: str,
     since_ts: float,
@@ -82,9 +85,7 @@ def time_window_search(
     """
     until_ts = until_ts or time.time()
     try:
-        conditions = [
-            FieldCondition(key="stored_at", range=Range(gte=since_ts, lte=until_ts))
-        ]
+        conditions = [FieldCondition(key="stored_at", range=Range(gte=since_ts, lte=until_ts))]
         vector = embed(query)
         client = get_client()
         hits = client.search(
@@ -100,6 +101,7 @@ def time_window_search(
 
 # ── Batch get by feedback_id ──────────────────────────────────────────────────
 
+
 def batch_get(feedback_ids: list[str]) -> list[dict]:
     """Fetch multiple analyses by feedback_id. Returns found payloads (missing IDs silently skipped)."""
     if not feedback_ids:
@@ -108,9 +110,7 @@ def batch_get(feedback_ids: list[str]) -> list[dict]:
         client = get_client()
         results, _ = client.scroll(
             collection_name=ANALYSES_COLLECTION,
-            scroll_filter=Filter(
-                must=[FieldCondition(key="feedback_id", match=MatchAny(any=feedback_ids))]
-            ),
+            scroll_filter=Filter(must=[FieldCondition(key="feedback_id", match=MatchAny(any=feedback_ids))]),
             limit=len(feedback_ids),
             with_payload=True,
         )
@@ -120,6 +120,7 @@ def batch_get(feedback_ids: list[str]) -> list[dict]:
 
 
 # ── Embedding export for clustering / drift ───────────────────────────────────
+
 
 def export_embeddings(
     limit: int = 2000,
@@ -153,15 +154,14 @@ def export_embeddings(
 
 # ── Nearest neighbours for a stored point ────────────────────────────────────
 
+
 def nearest_to(feedback_id: str, k: int = 5) -> list[dict]:
     """Find k most similar stored analyses to a given feedback_id."""
     try:
         client = get_client()
         results, _ = client.scroll(
             collection_name=ANALYSES_COLLECTION,
-            scroll_filter=Filter(
-                must=[FieldCondition(key="feedback_id", match=MatchValue(value=feedback_id))]
-            ),
+            scroll_filter=Filter(must=[FieldCondition(key="feedback_id", match=MatchValue(value=feedback_id))]),
             limit=1,
             with_vectors=True,
         )
@@ -173,10 +173,6 @@ def nearest_to(feedback_id: str, k: int = 5) -> list[dict]:
             query_vector=vector,
             limit=k + 1,  # +1 because the point itself is returned
         )
-        return [
-            {"score": h.score, **h.payload}
-            for h in hits
-            if h.payload.get("feedback_id") != feedback_id
-        ][:k]
+        return [{"score": h.score, **h.payload} for h in hits if h.payload.get("feedback_id") != feedback_id][:k]
     except Exception:
         return []

@@ -26,6 +26,7 @@ Point payload schema:
     reviewed_at    : float | None
     correction     : dict | None
 """
+
 from __future__ import annotations
 
 import time
@@ -39,12 +40,14 @@ REVIEW_COLLECTION = "review_queue"
 
 # ── Collection setup ──────────────────────────────────────────────────────────
 
+
 def _ensure_review_collection(client) -> None:
     existing = {c.name for c in client.get_collections().collections}
     if REVIEW_COLLECTION not in existing:
         from qdrant_client.models import Distance, PayloadSchemaType, VectorParams
 
         from vectordb.embedder import VECTOR_SIZE
+
         client.create_collection(
             collection_name=REVIEW_COLLECTION,
             vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
@@ -62,6 +65,7 @@ def _ensure_review_collection(client) -> None:
 
 
 # ── Enqueue ───────────────────────────────────────────────────────────────────
+
 
 def enqueue(feedback_id: str, analysis: "FeedbackAnalysis", reason: str = "low_confidence") -> None:  # noqa: F821
     """
@@ -88,19 +92,23 @@ def enqueue(feedback_id: str, analysis: "FeedbackAnalysis", reason: str = "low_c
             "correction": None,
         }
         from qdrant_client.models import PointStruct
+
         client.upsert(
             collection_name=REVIEW_COLLECTION,
-            points=[PointStruct(
-                id=str(uuid.uuid4()),
-                vector=embed(summary),
-                payload=payload,
-            )],
+            points=[
+                PointStruct(
+                    id=str(uuid.uuid4()),
+                    vector=embed(summary),
+                    payload=payload,
+                )
+            ],
         )
     except Exception:
         pass
 
 
 # ── Queue retrieval ───────────────────────────────────────────────────────────
+
 
 def get_queue(limit: int = 50, status: str = "pending") -> list[dict]:
     """
@@ -109,13 +117,12 @@ def get_queue(limit: int = 50, status: str = "pending") -> list[dict]:
     """
     try:
         from qdrant_client.models import FieldCondition, Filter, MatchValue
+
         client = get_client()
         _ensure_review_collection(client)
         results, _ = client.scroll(
             collection_name=REVIEW_COLLECTION,
-            scroll_filter=Filter(
-                must=[FieldCondition(key="status", match=MatchValue(value=status))]
-            ),
+            scroll_filter=Filter(must=[FieldCondition(key="status", match=MatchValue(value=status))]),
             limit=limit,
             with_payload=True,
         )
@@ -130,24 +137,21 @@ def queue_stats() -> dict:
     """Count items per status."""
     try:
         from qdrant_client.models import FieldCondition, Filter, MatchValue
+
         client = get_client()
         _ensure_review_collection(client)
         stats = {}
         for status in ("pending", "reviewed", "skipped"):
             results, _ = client.scroll(
                 collection_name=REVIEW_COLLECTION,
-                scroll_filter=Filter(
-                    must=[FieldCondition(key="status", match=MatchValue(value=status))]
-                ),
+                scroll_filter=Filter(must=[FieldCondition(key="status", match=MatchValue(value=status))]),
                 limit=1,
                 with_payload=False,
             )
             # scroll returns actual items; for count we use count()
             stats[status] = client.count(
                 collection_name=REVIEW_COLLECTION,
-                count_filter=Filter(
-                    must=[FieldCondition(key="status", match=MatchValue(value=status))]
-                ),
+                count_filter=Filter(must=[FieldCondition(key="status", match=MatchValue(value=status))]),
             ).count
         return stats
     except Exception:
@@ -155,6 +159,7 @@ def queue_stats() -> dict:
 
 
 # ── Submit correction ─────────────────────────────────────────────────────────
+
 
 def submit_correction(
     feedback_id: str,
@@ -173,24 +178,25 @@ def submit_correction(
     """
     try:
         from qdrant_client.models import FieldCondition, Filter, MatchValue
+
         client = get_client()
 
         correction = {
-            k: v for k, v in {
+            k: v
+            for k, v in {
                 "corrected_category": corrected_category,
                 "corrected_subcategory": corrected_subcategory,
                 "corrected_sentiment": corrected_sentiment,
                 "reviewer_note": reviewer_note,
-            }.items() if v is not None
+            }.items()
+            if v is not None
         }
 
         # 1. Mark as reviewed in the queue
         client.set_payload(
             collection_name=REVIEW_COLLECTION,
             payload={"status": "reviewed", "reviewed_at": time.time(), "correction": correction},
-            points=Filter(
-                must=[FieldCondition(key="feedback_id", match=MatchValue(value=feedback_id))]
-            ),
+            points=Filter(must=[FieldCondition(key="feedback_id", match=MatchValue(value=feedback_id))]),
         )
 
         # 2. Patch the original analysis in feedback_analyses
@@ -205,18 +211,14 @@ def submit_correction(
             client.set_payload(
                 collection_name=ANALYSES_COLLECTION,
                 payload=patch,
-                points=Filter(
-                    must=[FieldCondition(key="feedback_id", match=MatchValue(value=feedback_id))]
-                ),
+                points=Filter(must=[FieldCondition(key="feedback_id", match=MatchValue(value=feedback_id))]),
             )
 
         # 3. Add to few_shot_examples so future analyses benefit.
         # Re-fetch the just-reviewed item to get its summary.
         reviewed, _ = client.scroll(
             collection_name=REVIEW_COLLECTION,
-            scroll_filter=Filter(
-                must=[FieldCondition(key="feedback_id", match=MatchValue(value=feedback_id))]
-            ),
+            scroll_filter=Filter(must=[FieldCondition(key="feedback_id", match=MatchValue(value=feedback_id))]),
             limit=1,
             with_payload=True,
         )
@@ -226,20 +228,23 @@ def submit_correction(
             category = corrected_category or p.get("current_category", "Other")
             sentiment = corrected_sentiment or p.get("current_sentiment", "neutral")
             from qdrant_client.models import PointStruct
+
             client.upsert(
                 collection_name=FEW_SHOT_COLLECTION,
-                points=[PointStruct(
-                    id=str(uuid.uuid4()),
-                    vector=embed(summary),
-                    payload={
-                        "feedback_id": feedback_id,
-                        "summary": summary,
-                        "category": category,
-                        "sentiment": sentiment,
-                        "source": "human_correction",
-                        "added_at": time.time(),
-                    },
-                )],
+                points=[
+                    PointStruct(
+                        id=str(uuid.uuid4()),
+                        vector=embed(summary),
+                        payload={
+                            "feedback_id": feedback_id,
+                            "summary": summary,
+                            "category": category,
+                            "sentiment": sentiment,
+                            "source": "human_correction",
+                            "added_at": time.time(),
+                        },
+                    )
+                ],
             )
 
         return {"ok": True, "feedback_id": feedback_id, "correction": correction}

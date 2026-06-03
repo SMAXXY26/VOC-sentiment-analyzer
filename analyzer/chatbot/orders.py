@@ -5,6 +5,7 @@ Collections:
   customer_orders  — order records, queried by customer_id payload filter
   support_tickets  — complaint / refund / escalation tickets
 """
+
 from __future__ import annotations
 
 import time
@@ -59,6 +60,7 @@ def _ensure_collection(collection: str):
 
     from vectordb.client import get_client
     from vectordb.embedder import VECTOR_SIZE
+
     client = get_client()
     existing = {c.name for c in client.get_collections().collections}
     if collection not in existing:
@@ -75,14 +77,13 @@ def seed_demo_orders() -> None:
         from qdrant_client.models import FieldCondition, Filter, MatchValue, PointStruct
 
         from vectordb.embedder import embed
+
         client = _ensure_collection(ORDERS_COLLECTION)
         for order in _DEMO_ORDERS:
             # Skip if already seeded
             existing, _ = client.scroll(
                 collection_name=ORDERS_COLLECTION,
-                scroll_filter=Filter(must=[
-                    FieldCondition(key="order_id", match=MatchValue(value=order["order_id"]))
-                ]),
+                scroll_filter=Filter(must=[FieldCondition(key="order_id", match=MatchValue(value=order["order_id"]))]),
                 limit=1,
             )
             if existing:
@@ -90,11 +91,13 @@ def seed_demo_orders() -> None:
             desc = f"Order {order['order_id']} from {order['restaurant']}: {', '.join(order['items'])}"
             client.upsert(
                 collection_name=ORDERS_COLLECTION,
-                points=[PointStruct(
-                    id=str(uuid.uuid4()),
-                    vector=embed(desc),
-                    payload=order,
-                )],
+                points=[
+                    PointStruct(
+                        id=str(uuid.uuid4()),
+                        vector=embed(desc),
+                        payload=order,
+                    )
+                ],
             )
     except Exception:
         pass
@@ -103,12 +106,11 @@ def seed_demo_orders() -> None:
 def get_customer_orders(customer_id: str, limit: int = 5) -> list[dict]:
     try:
         from qdrant_client.models import FieldCondition, Filter, MatchValue
+
         client = _ensure_collection(ORDERS_COLLECTION)
         points, _ = client.scroll(
             collection_name=ORDERS_COLLECTION,
-            scroll_filter=Filter(must=[
-                FieldCondition(key="customer_id", match=MatchValue(value=customer_id))
-            ]),
+            scroll_filter=Filter(must=[FieldCondition(key="customer_id", match=MatchValue(value=customer_id))]),
             limit=limit,
             with_payload=True,
         )
@@ -120,12 +122,11 @@ def get_customer_orders(customer_id: str, limit: int = 5) -> list[dict]:
 def get_order_by_id(order_id: str) -> Optional[dict]:
     try:
         from qdrant_client.models import FieldCondition, Filter, MatchValue
+
         client = _ensure_collection(ORDERS_COLLECTION)
         points, _ = client.scroll(
             collection_name=ORDERS_COLLECTION,
-            scroll_filter=Filter(must=[
-                FieldCondition(key="order_id", match=MatchValue(value=order_id))
-            ]),
+            scroll_filter=Filter(must=[FieldCondition(key="order_id", match=MatchValue(value=order_id))]),
             limit=1,
             with_payload=True,
         )
@@ -147,6 +148,7 @@ def create_ticket(
         from qdrant_client.models import PointStruct
 
         from vectordb.embedder import embed
+
         client = _ensure_collection(TICKETS_COLLECTION)
         payload = {
             "ticket_id": ticket_id,
@@ -160,11 +162,13 @@ def create_ticket(
         }
         client.upsert(
             collection_name=TICKETS_COLLECTION,
-            points=[PointStruct(
-                id=str(uuid.uuid4()),
-                vector=embed(f"{ticket_type}: {description}"[:200]),
-                payload=payload,
-            )],
+            points=[
+                PointStruct(
+                    id=str(uuid.uuid4()),
+                    vector=embed(f"{ticket_type}: {description}"[:200]),
+                    payload=payload,
+                )
+            ],
         )
     except Exception:
         pass

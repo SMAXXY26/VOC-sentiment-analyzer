@@ -135,12 +135,14 @@ def print_results(stats: Stats, elapsed: float, total: int, batch_size: int):
     if batch_size > 1:
         print(f"  Message throughput : {effective_msgs / elapsed:.1f} msgs/s ({batch_size} per req)")
     if stats.latencies_ms:
-        print(f"  Latency (ms)       : "
-              f"p50={pct(stats.latencies_ms, 50):.1f}  "
-              f"p95={pct(stats.latencies_ms, 95):.1f}  "
-              f"p99={pct(stats.latencies_ms, 99):.1f}  "
-              f"max={max(stats.latencies_ms):.1f}  "
-              f"mean={statistics.mean(stats.latencies_ms):.1f}")
+        print(
+            f"  Latency (ms)       : "
+            f"p50={pct(stats.latencies_ms, 50):.1f}  "
+            f"p95={pct(stats.latencies_ms, 95):.1f}  "
+            f"p99={pct(stats.latencies_ms, 99):.1f}  "
+            f"max={max(stats.latencies_ms):.1f}  "
+            f"mean={statistics.mean(stats.latencies_ms):.1f}"
+        )
     print("=" * 60)
 
 
@@ -173,7 +175,9 @@ async def watch_consumer_drain(expected_msgs: int, max_wait_s: int):
         print(f"  t+{int(time.perf_counter() - t0):3d}s  analyzed={int(delta)}/{expected_msgs}  rate={rate:.1f} msgs/s")
         last_count = now
         if delta >= expected_msgs:
-            print(f"\n  Queue drained in {time.perf_counter() - t0:.1f}s, end-to-end throughput {expected_msgs / (time.perf_counter() - t0):.1f} msgs/s")
+            print(
+                f"\n  Queue drained in {time.perf_counter() - t0:.1f}s, end-to-end throughput {expected_msgs / (time.perf_counter() - t0):.1f} msgs/s"
+            )
             return
     print(f"\n  Timed out after {max_wait_s}s; {int(last_count - start)}/{expected_msgs} analyzed.")
 

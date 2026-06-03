@@ -30,6 +30,7 @@ async def _lifespan(app: FastAPI):
     # KAFKA_BROKERS is set and kafka-python is installed.
     try:
         from .store_retry import start_retry_consumer
+
         start_retry_consumer()
     except Exception:
         pass
@@ -85,12 +86,14 @@ async def ready():
     import os
 
     import httpx
+
     checks: dict = {}
     healthy = True
 
     # Probe Qdrant
     try:
         from vectordb.client import get_client
+
         await asyncio.to_thread(get_client().get_collections)
         checks["qdrant"] = "ok"
     except Exception as e:
@@ -111,6 +114,7 @@ async def ready():
 
     status_code = 200 if healthy else 503
     from fastapi.responses import JSONResponse
+
     return JSONResponse(
         status_code=status_code,
         content={"status": "ok" if healthy else "degraded", **checks},
@@ -130,6 +134,7 @@ def list_analyses(limit: int = 50, offset: int = 0, q: Optional[str] = None):
     try:
         from vectordb.client import ANALYSES_COLLECTION, get_client
         from vectordb.store import search
+
         if q and q.strip():
             results = search(q.strip(), k=limit)
             return {"items": results, "total": len(results)}
@@ -150,6 +155,7 @@ def analyses_summary():
     try:
         from vectordb.client import ANALYSES_COLLECTION, get_client
         from vectordb.store import get_feature_history
+
         client = get_client()
         all_points = []
         offset = None
@@ -186,9 +192,10 @@ def analyses_summary():
 
 # ── Chatbot endpoints ──────────────────────────────────────────────────────────
 
+
 class ChatStartRequest(BaseModel):
     customer_id: str = "guest"
-    password: Optional[str] = None   # if provided, authenticate against EDBMS
+    password: Optional[str] = None  # if provided, authenticate against EDBMS
     message: Optional[str] = None
 
 
@@ -213,9 +220,11 @@ async def chat_start(req: ChatStartRequest):
     customer: dict | str = req.customer_id
     if req.password:
         from .chatbot.edbms import authenticate
+
         result = await asyncio.to_thread(authenticate, req.customer_id, req.password)
         if result is None:
             from fastapi import HTTPException
+
             raise HTTPException(status_code=401, detail="Invalid username or password")
         customer = result
 
@@ -242,6 +251,7 @@ async def chat_continue(session_id: str, req: ChatRequest):
         raise HTTPException(status_code=400, detail="message is required")
     from .chatbot.agent import chat as agent_chat
     from .chatbot.agent import get_quick_replies
+
     reply = await asyncio.to_thread(agent_chat, session_id, req.message.strip())
     quick_replies = await asyncio.to_thread(get_quick_replies, session_id)
     return ChatResponse(session_id=session_id, reply=reply, quick_replies=quick_replies)
@@ -251,6 +261,7 @@ async def chat_continue(session_id: str, req: ChatRequest):
 async def chat_end(session_id: str):
     """EOC: end the session, summarise and store to Qdrant."""
     from .chatbot.agent import end_conversation
+
     summary = await asyncio.to_thread(end_conversation, session_id)
     return {"session_id": session_id, "summary": summary}
 
@@ -259,6 +270,7 @@ async def chat_end(session_id: str):
 async def chat_history(session_id: str):
     """Return the message history for an active session."""
     from .chatbot.agent import get_history
+
     history = get_history(session_id)
     if history is None:
         raise HTTPException(status_code=404, detail="session not found or expired")
@@ -266,6 +278,7 @@ async def chat_history(session_id: str):
 
 
 # ── Embedding / vector search ──────────────────────────────────────────────────
+
 
 @app.get("/search")
 async def embedding_search(
@@ -282,12 +295,14 @@ async def embedding_search(
     if not q.strip():
         raise HTTPException(status_code=400, detail="q is required")
     from vectordb.retrieval import filtered_search
+
     return await asyncio.to_thread(
         filtered_search, q, k, category, sentiment, risk_level, escalate, churn_risk, min_intensity
     )
 
 
 # ── Topic clustering ───────────────────────────────────────────────────────────
+
 
 @app.post("/cluster")
 async def cluster_topics(n_clusters: Optional[int] = None):
@@ -297,6 +312,7 @@ async def cluster_topics(n_clusters: Optional[int] = None):
     Writes cluster_id + cluster_label back to each Qdrant point.
     """
     from analyzer.clustering import run_clustering
+
     return await asyncio.to_thread(run_clustering, n_clusters)
 
 
@@ -304,8 +320,8 @@ async def cluster_topics(n_clusters: Optional[int] = None):
 async def get_clusters():
     """Return cluster labels from the most recent clustering run (reads from Qdrant payloads)."""
     try:
-
         from vectordb.client import ANALYSES_COLLECTION, get_client
+
         client = get_client()
         results, _ = client.scroll(
             collection_name=ANALYSES_COLLECTION,
@@ -329,10 +345,12 @@ async def get_clusters():
 
 # ── Semantic drift ─────────────────────────────────────────────────────────────
 
+
 @app.get("/drift")
 async def drift_report(recent_days: int = 7, baseline_days: int = 30):
     """Compute semantic drift between recent and baseline feedback windows."""
     from analyzer.drift import compute_drift
+
     return await asyncio.to_thread(compute_drift, recent_days, baseline_days)
 
 
@@ -340,15 +358,18 @@ async def drift_report(recent_days: int = 7, baseline_days: int = 30):
 async def drift_history(limit: int = 30):
     """Fetch stored drift snapshots, newest first."""
     from analyzer.drift import get_drift_history
+
     return await asyncio.to_thread(get_drift_history, limit)
 
 
 # ── Active learning / review queue ────────────────────────────────────────────
 
+
 @app.get("/review/queue")
 async def review_queue(limit: int = 50):
     """Get pending low-confidence items sorted by confidence ascending (least confident first)."""
     from analyzer.active_learning import get_queue
+
     return await asyncio.to_thread(get_queue, limit)
 
 
@@ -356,6 +377,7 @@ async def review_queue(limit: int = 50):
 async def review_stats():
     """Count of pending / reviewed / skipped items in the review queue."""
     from analyzer.active_learning import queue_stats
+
     return await asyncio.to_thread(queue_stats)
 
 
@@ -373,6 +395,7 @@ async def submit_correction(feedback_id: str, req: CorrectionRequest):
     Updates the stored analysis and adds the corrected item to few_shot_examples.
     """
     from analyzer.active_learning import submit_correction as _submit
+
     return await asyncio.to_thread(
         _submit,
         feedback_id,
@@ -385,6 +408,7 @@ async def submit_correction(feedback_id: str, req: CorrectionRequest):
 
 # ── Agentic review workflow ────────────────────────────────────────────────────
 
+
 @app.post("/review/run")
 async def run_review_agent():
     """
@@ -392,6 +416,7 @@ async def run_review_agent():
     then synthesises a ReviewReport with action items and risk level.
     """
     from analyzer.review_agent import run_review
+
     report = await asyncio.to_thread(run_review)
     return report.model_dump()
 
@@ -400,15 +425,18 @@ async def run_review_agent():
 async def get_review_reports(limit: int = 20):
     """Fetch stored agentic review reports, newest first."""
     from analyzer.review_agent import get_reports
+
     return await asyncio.to_thread(get_reports, limit)
 
 
 # ── Distributed inference status ──────────────────────────────────────────────
 
+
 @app.get("/inference/endpoints")
 async def inference_endpoints():
     """Health-check all configured vLLM inference endpoints."""
     from analyzer.llm import endpoint_count, get_healthy_endpoints
+
     return {
         "endpoint_count": endpoint_count(),
         "endpoints": await asyncio.to_thread(get_healthy_endpoints),
@@ -417,14 +445,16 @@ async def inference_endpoints():
 
 # ── System stats ───────────────────────────────────────────────────────────────
 
+
 @app.get("/system")
 def system_stats():
     import psutil
+
     mem = psutil.virtual_memory()
     stats = {
         "cpu_percent": psutil.cpu_percent(interval=0.2),
-        "ram_used_gb": round(mem.used / 1024 ** 3, 2),
-        "ram_total_gb": round(mem.total / 1024 ** 3, 2),
+        "ram_used_gb": round(mem.used / 1024**3, 2),
+        "ram_total_gb": round(mem.total / 1024**3, 2),
         "ram_percent": mem.percent,
         "gpu_used_mb": None,
         "gpu_total_mb": None,
@@ -432,12 +462,13 @@ def system_stats():
     }
     try:
         import pynvml
+
         pynvml.nvmlInit()
         handle = pynvml.nvmlDeviceGetHandleByIndex(0)
         mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
         util = pynvml.nvmlDeviceGetUtilizationRates(handle)
-        stats["gpu_used_mb"] = round(mem_info.used / 1024 ** 2)
-        stats["gpu_total_mb"] = round(mem_info.total / 1024 ** 2)
+        stats["gpu_used_mb"] = round(mem_info.used / 1024**2)
+        stats["gpu_total_mb"] = round(mem_info.total / 1024**2)
         stats["gpu_util_percent"] = util.gpu
         pynvml.nvmlShutdown()
     except Exception:

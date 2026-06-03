@@ -56,17 +56,18 @@ class NPSIngester(BaseIngester):
                         pass
 
                 segment = self._segment(score)
-                extra = {k: v for k, v in row.items()
-                         if k not in {self.score_col, self.comment_col, self.date_col}}
+                extra = {k: v for k, v in row.items() if k not in {self.score_col, self.comment_col, self.date_col}}
 
-                records.append(RawFeedback(
-                    id=str(uuid.uuid4()),
-                    source=FeedbackSource.nps_survey,
-                    text=comment,
-                    rating=rating,
-                    submitted_at=submitted_at,
-                    metadata={"nps_score": score, "nps_segment": segment, **extra},
-                ))
+                records.append(
+                    RawFeedback(
+                        id=str(uuid.uuid4()),
+                        source=FeedbackSource.nps_survey,
+                        text=comment,
+                        rating=rating,
+                        submitted_at=submitted_at,
+                        metadata={"nps_score": score, "nps_segment": segment, **extra},
+                    )
+                )
         return records
 
     @staticmethod

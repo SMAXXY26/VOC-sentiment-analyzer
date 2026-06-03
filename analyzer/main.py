@@ -13,9 +13,7 @@ from .schemas import FeedbackAnalysis
 console = Console()
 
 
-def analyze_single(
-    raw_text: str, feedback_id: str | None = None, model: str | None = None
-) -> FeedbackAnalysis:
+def analyze_single(raw_text: str, feedback_id: str | None = None, model: str | None = None) -> FeedbackAnalysis:
     import time
 
     from .metrics import (
@@ -38,6 +36,7 @@ def analyze_single(
         import os
 
         from vectordb.store import find_duplicates, get_analysis_by_id
+
         threshold = float(os.getenv("DEDUP_THRESHOLD", "0.95"))
         matches = find_duplicates(raw_text, threshold=threshold)
         if matches:
@@ -46,9 +45,7 @@ def analyze_single(
                 DEDUP_CACHE_HITS.inc()
                 # Each hit skips the whole LLM section — quantify the GPU work avoided.
                 LLM_CALLS_SAVED_TOTAL.inc(LLM_STAGES)
-                PIPELINE_REQUEST_DURATION.labels(outcome="cache_hit").observe(
-                    time.perf_counter() - req_start
-                )
+                PIPELINE_REQUEST_DURATION.labels(outcome="cache_hit").observe(time.perf_counter() - req_start)
                 return cached
     except Exception:
         pass  # never block if Qdrant is unavailable
@@ -62,6 +59,7 @@ def analyze_single(
     # the authoritative decision is model-based (1.5B router) via resolve_model_tier.
     from .llm import reset_target_model, set_target_model
     from .routing import resolve_model_tier
+
     tier = resolve_model_tier(raw_text, hint=model)
     token = set_target_model(tier)
     try:
@@ -90,13 +88,12 @@ def analyze_single(
         NEEDS_REVIEW_TOTAL.inc()
         try:
             from analyzer.active_learning import enqueue
+
             enqueue(fid, result)
         except Exception:
             pass
 
-    PIPELINE_REQUEST_DURATION.labels(outcome="computed").observe(
-        time.perf_counter() - req_start
-    )
+    PIPELINE_REQUEST_DURATION.labels(outcome="computed").observe(time.perf_counter() - req_start)
     return result
 
 

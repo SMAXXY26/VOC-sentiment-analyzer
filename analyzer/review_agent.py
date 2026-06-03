@@ -18,6 +18,7 @@ Tools available to the agent:
 
 The final output is a ReviewReport Pydantic model serialised to JSON.
 """
+
 from __future__ import annotations
 
 import time
@@ -35,6 +36,7 @@ from analyzer.llm import get_llm
 
 # ── Pydantic report schema ────────────────────────────────────────────────────
 
+
 class ReviewReport(BaseModel):
     generated_at: float = Field(default_factory=time.time)
     pending_reviews: int = 0
@@ -42,22 +44,24 @@ class ReviewReport(BaseModel):
     escalation_count: int = 0
     summary: str = ""
     action_items: list[str] = Field(default_factory=list)
-    risk_level: str = "low"   # low | medium | high | critical
+    risk_level: str = "low"  # low | medium | high | critical
 
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
+
 
 @tool
 def fetch_review_queue() -> str:
     """Fetch items in the active learning review queue that need human attention."""
     try:
         from analyzer.active_learning import get_queue
+
         items = get_queue(limit=20)
         if not items:
             return "Review queue is empty."
         lines = [
-            f"- [{i.get('pipeline_confidence', '?'):.2f}] {i.get('summary','')[:100]} "
-            f"(category={i.get('current_category','?')}, sentiment={i.get('current_sentiment','?')})"
+            f"- [{i.get('pipeline_confidence', '?'):.2f}] {i.get('summary', '')[:100]} "
+            f"(category={i.get('current_category', '?')}, sentiment={i.get('current_sentiment', '?')})"
             for i in items[:10]
         ]
         return f"{len(items)} pending items:\n" + "\n".join(lines)
@@ -70,6 +74,7 @@ def fetch_drift_status() -> str:
     """Check semantic drift — whether recent feedback topics or sentiment have shifted from baseline."""
     try:
         from analyzer.drift import compute_drift
+
         r = compute_drift()
         if "error" in r:
             return r["error"]
@@ -77,7 +82,7 @@ def fetch_drift_status() -> str:
         if r.get("centroid_alert"):
             alerts.append(f"topic drift (cosine distance={r['centroid_distance']:.3f})")
         if r.get("sentiment_alert"):
-            alerts.append(f"sentiment shift ({r['sentiment_shift']*100:.1f}pp more negative)")
+            alerts.append(f"sentiment shift ({r['sentiment_shift'] * 100:.1f}pp more negative)")
         if r.get("category_alert"):
             alerts.append(f"category distribution shift (KL={r['category_kl']:.3f})")
         if not alerts:
@@ -92,11 +97,12 @@ def fetch_escalations() -> str:
     """Fetch recent high/critical risk escalations from the feedback database."""
     try:
         from vectordb.store import get_escalation_precedents
+
         items = get_escalation_precedents(k=10)
         if not items:
             return "No escalated feedback found."
         lines = [
-            f"- [{i.get('risk_level','?')}] {i.get('summary','')[:100]} → {i.get('suggested_action','')[:80]}"
+            f"- [{i.get('risk_level', '?')}] {i.get('summary', '')[:100]} → {i.get('suggested_action', '')[:80]}"
             for i in items[:8]
         ]
         return f"{len(items)} escalated items:\n" + "\n".join(lines)
@@ -113,6 +119,7 @@ _SYSTEM = (
 )
 
 # ── Graph ─────────────────────────────────────────────────────────────────────
+
 
 def _merge(a: list, b: list) -> list:
     return a + b
@@ -156,6 +163,7 @@ def _ensure_reports_collection(client) -> None:
         from qdrant_client.models import Distance, VectorParams
 
         from vectordb.embedder import VECTOR_SIZE
+
         client.create_collection(
             collection_name=_REPORTS_COLLECTION,
             vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
@@ -168,15 +176,18 @@ def _store_report(report: ReviewReport) -> None:
 
         from vectordb.client import get_client
         from vectordb.embedder import embed
+
         client = get_client()
         _ensure_reports_collection(client)
         client.upsert(
             collection_name=_REPORTS_COLLECTION,
-            points=[PointStruct(
-                id=str(uuid.uuid4()),
-                vector=embed(report.summary or "review report"),
-                payload=report.model_dump(),
-            )],
+            points=[
+                PointStruct(
+                    id=str(uuid.uuid4()),
+                    vector=embed(report.summary or "review report"),
+                    payload=report.model_dump(),
+                )
+            ],
         )
     except Exception:
         pass
@@ -184,15 +195,14 @@ def _store_report(report: ReviewReport) -> None:
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
+
 def run_review() -> ReviewReport:
     """
     Trigger the agentic review workflow.
     Calls all three tools, synthesises findings, stores report, returns ReviewReport.
     """
     graph = _get_review_graph()
-    result = graph.invoke({
-        "messages": [SystemMessage(content=_SYSTEM)]
-    })
+    result = graph.invoke({"messages": [SystemMessage(content=_SYSTEM)]})
 
     # Extract final AI response
     raw = ""
@@ -206,6 +216,7 @@ def run_review() -> ReviewReport:
     try:
         import json
         import re
+
         json_match = re.search(r"\{.*\}", raw, re.DOTALL)
         if json_match:
             parsed = json.loads(json_match.group())
@@ -227,6 +238,7 @@ def get_reports(limit: int = 20) -> list[dict]:
     """Fetch stored review reports, newest first."""
     try:
         from vectordb.client import get_client
+
         client = get_client()
         _ensure_reports_collection(client)
         results, _ = client.scroll(

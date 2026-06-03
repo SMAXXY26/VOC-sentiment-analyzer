@@ -2,6 +2,7 @@
 Import a results JSON file (from run_pipeline.py) into Qdrant.
 Usage: python import_results.py results_clothing.json
 """
+
 import json
 import sys
 import uuid
@@ -50,6 +51,7 @@ def main():
             print(f"  [skip] {e}")
 
     print(f"\nDone. Imported {imported}/{len(items)} analyses into Qdrant.")
+
 
 if __name__ == "__main__":
     main()

@@ -4,13 +4,14 @@ Usage:
     python training/merge_lora.py --adapter training/checkpoints/dpo-adapter --out training/merged/
     python training/merge_lora.py --adapter training/checkpoints/sft-adapter --out training/merged/
 """
+
 import argparse
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--adapter", default="training/checkpoints/dpo-adapter")
-    parser.add_argument("--out",     default="training/merged")
+    parser.add_argument("--out", default="training/merged")
     args = parser.parse_args()
 
     from unsloth import FastLanguageModel
@@ -27,7 +28,7 @@ def main():
     model.save_pretrained_merged(
         args.out,
         tokenizer,
-        save_method="merged_16bit",   # full BF16, no quantization yet
+        save_method="merged_16bit",  # full BF16, no quantization yet
     )
     print("Done. Run quantize_awq.py next.")
 

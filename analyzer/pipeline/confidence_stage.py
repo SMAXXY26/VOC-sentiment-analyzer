@@ -25,6 +25,7 @@ Computes a single pipeline_confidence float (0.0–1.0) from three signals:
 Items with pipeline_confidence < REVIEW_THRESHOLD (default 0.65) are queued for
 active learning review.
 """
+
 import os
 
 from langchain_core.runnables import RunnableLambda
@@ -33,9 +34,9 @@ REVIEW_THRESHOLD = float(os.getenv("REVIEW_THRESHOLD", "0.65"))
 
 
 def _score_sentiment_consistency(ctx: dict) -> float:
-    sentiment = ctx["sentiment"].sentiment      # positive / negative / neutral
-    intensity = ctx["sentiment"].intensity      # 1–10
-    emotions  = ctx["sentiment"].emotions       # list[str]
+    sentiment = ctx["sentiment"].sentiment  # positive / negative / neutral
+    intensity = ctx["sentiment"].intensity  # 1–10
+    emotions = ctx["sentiment"].emotions  # list[str]
 
     if sentiment == "neutral":
         # Neutral with low intensity is fine; neutral with high intensity is odd
@@ -62,14 +63,12 @@ def _novelty_score(ctx: dict) -> float:
 
 
 def _compute_confidence(ctx: dict) -> dict:
-    taxonomy_conf   = ctx["taxonomy"].confidence           # 0–1 from LLM
-    sentiment_score = _score_sentiment_consistency(ctx)    # 0–1
-    novelty         = _novelty_score(ctx)                  # 0–1
+    taxonomy_conf = ctx["taxonomy"].confidence  # 0–1 from LLM
+    sentiment_score = _score_sentiment_consistency(ctx)  # 0–1
+    novelty = _novelty_score(ctx)  # 0–1
 
     pipeline_confidence = round(
-        0.4 * taxonomy_conf +
-        0.3 * sentiment_score +
-        0.3 * novelty,
+        0.4 * taxonomy_conf + 0.3 * sentiment_score + 0.3 * novelty,
         4,
     )
 

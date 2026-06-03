@@ -2,6 +2,7 @@
 High-level vector DB operations used by the pipeline.
 All public functions gracefully degrade if Qdrant is unreachable.
 """
+
 import uuid
 from typing import TYPE_CHECKING, Optional
 
@@ -88,9 +89,7 @@ def get_escalation_precedents(k: int = 3) -> list[dict]:
         client = get_client()
         results, _ = client.scroll(
             collection_name=ANALYSES_COLLECTION,
-            scroll_filter=Filter(
-                must=[FieldCondition(key="escalate", match=MatchValue(value=True))]
-            ),
+            scroll_filter=Filter(must=[FieldCondition(key="escalate", match=MatchValue(value=True))]),
             limit=k,
             with_payload=True,
         )
@@ -111,6 +110,7 @@ def get_feature_history(k: int = 20) -> list[str]:
         for point in results[0]:
             features.extend(point.payload.get("feature_requests", []))
         from collections import Counter
+
         return [f for f, _ in Counter(features).most_common(5)]
     except Exception:
         return []
@@ -122,15 +122,14 @@ def get_analysis_by_id(feedback_id: str) -> "Optional[FeedbackAnalysis]":
         client = get_client()
         results = client.scroll(
             collection_name=ANALYSES_COLLECTION,
-            scroll_filter=Filter(
-                must=[FieldCondition(key="feedback_id", match=MatchValue(value=feedback_id))]
-            ),
+            scroll_filter=Filter(must=[FieldCondition(key="feedback_id", match=MatchValue(value=feedback_id))]),
             limit=1,
             with_payload=True,
         )
         points = results[0]
         if points and "analysis_json" in points[0].payload:
             from analyzer.schemas import FeedbackAnalysis
+
             return FeedbackAnalysis.model_validate_json(points[0].payload["analysis_json"])
     except Exception:
         pass
@@ -154,6 +153,7 @@ def search(query: str, k: int = 10) -> list[dict]:
 if __name__ == "__main__":
     import json
     import sys
+
     query = " ".join(sys.argv[1:]) or "billing issue"
     results = search(query)
     print(json.dumps(results, indent=2))

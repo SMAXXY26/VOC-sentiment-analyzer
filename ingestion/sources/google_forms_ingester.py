@@ -32,11 +32,7 @@ class GoogleFormsIngester(BaseIngester):
         with open(file_path, newline="", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                text_parts = [
-                    row[q].strip()
-                    for q in self.feedback_questions
-                    if q in row and row[q].strip()
-                ]
+                text_parts = [row[q].strip() for q in self.feedback_questions if q in row and row[q].strip()]
                 if not text_parts:
                     continue
 
@@ -56,12 +52,14 @@ class GoogleFormsIngester(BaseIngester):
                         except ValueError:
                             continue
 
-                records.append(RawFeedback(
-                    id=str(uuid.uuid4()),
-                    source=FeedbackSource.google_forms,
-                    text="\n".join(text_parts),
-                    rating=rating,
-                    submitted_at=submitted_at,
-                    metadata={},
-                ))
+                records.append(
+                    RawFeedback(
+                        id=str(uuid.uuid4()),
+                        source=FeedbackSource.google_forms,
+                        text="\n".join(text_parts),
+                        rating=rating,
+                        submitted_at=submitted_at,
+                        metadata={},
+                    )
+                )
         return records

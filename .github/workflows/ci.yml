@@ -22,12 +22,9 @@ jobs:
       - name: Ruff lint
         run: ruff check .
 
-      # Auto-formatting is advisory, not a gate: the existing tree predates ruff and
-      # a one-shot reformat (50+ files) would bury real diffs and fight the author's
-      # editing style. Surface drift without failing the build; adopt format wholesale
-      # in a dedicated commit later.
-      - name: Ruff format check (advisory)
-        run: ruff format --check . || true
+      # The whole repo is now ruff-formatted, so this is an enforced gate.
+      - name: Ruff format check
+        run: ruff format --check .
 
       # The test suite is mocked (no vLLM / Qdrant needed), but it still imports
       # the analyzer package, so install its runtime deps. vllm is a heavy GPU

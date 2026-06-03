@@ -23,9 +23,7 @@ class SemanticEnrichment(BaseModel):
     context: str = Field(description="Brief context e.g. post-purchase, onboarding, support")
 
 
-TaxonomyCategory = Literal[
-    "Billing", "Product", "Support", "Shipping", "Account", "Onboarding", "Other"
-]
+TaxonomyCategory = Literal["Billing", "Product", "Support", "Shipping", "Account", "Onboarding", "Other"]
 
 
 class TaxonomyClassification(BaseModel):

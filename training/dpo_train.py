@@ -7,24 +7,23 @@ Usage:
     python training/dpo_train.py --data training/data/dpo.jsonl
     python training/dpo_train.py --data training/data/dpo.jsonl --max-steps 1  # dry run
 """
+
 import argparse
 import os
 
-SFT_ADAPTER  = "training/checkpoints/sft-adapter"
-OUTPUT_DIR   = "training/checkpoints/dpo-adapter"
-MAX_SEQ_LEN  = 1024
+SFT_ADAPTER = "training/checkpoints/sft-adapter"
+OUTPUT_DIR = "training/checkpoints/dpo-adapter"
+MAX_SEQ_LEN = 1024
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data",        default="training/data/dpo.jsonl")
-    parser.add_argument("--sft-adapter", default=SFT_ADAPTER,
-                        help="Path to SFT LoRA adapter (starting point for DPO)")
-    parser.add_argument("--output-dir",  default=OUTPUT_DIR)
-    parser.add_argument("--max-steps",   type=int, default=-1)
-    parser.add_argument("--epochs",      type=int, default=1)
-    parser.add_argument("--beta",        type=float, default=0.1,
-                        help="DPO temperature — lower = stronger preference signal")
+    parser.add_argument("--data", default="training/data/dpo.jsonl")
+    parser.add_argument("--sft-adapter", default=SFT_ADAPTER, help="Path to SFT LoRA adapter (starting point for DPO)")
+    parser.add_argument("--output-dir", default=OUTPUT_DIR)
+    parser.add_argument("--max-steps", type=int, default=-1)
+    parser.add_argument("--epochs", type=int, default=1)
+    parser.add_argument("--beta", type=float, default=0.1, help="DPO temperature — lower = stronger preference signal")
     args = parser.parse_args()
 
     from datasets import load_dataset
@@ -48,8 +47,7 @@ def main():
         r=16,
         lora_alpha=32,
         lora_dropout=0.05,
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                        "gate_proj", "up_proj", "down_proj"],
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
         bias="none",
         use_gradient_checkpointing="unsloth",
         random_state=42,
@@ -70,14 +68,14 @@ def main():
         per_device_train_batch_size=1,
         gradient_accumulation_steps=4,
         warmup_ratio=0.1,
-        learning_rate=5e-5,               # lower than SFT — fine adjustments only
+        learning_rate=5e-5,  # lower than SFT — fine adjustments only
         lr_scheduler_type="cosine",
         fp16=not os.getenv("USE_BF16"),
         logging_steps=5,
         save_strategy="epoch",
         save_total_limit=2,
         beta=args.beta,
-        loss_type="sigmoid",              # standard DPO loss
+        loss_type="sigmoid",  # standard DPO loss
         max_prompt_length=MAX_SEQ_LEN // 2,
         max_length=MAX_SEQ_LEN,
         report_to="none",
@@ -85,7 +83,7 @@ def main():
 
     trainer = DPOTrainer(
         model=model,
-        ref_model=None,                   # ref_model=None uses the base frozen weights
+        ref_model=None,  # ref_model=None uses the base frozen weights
         args=dpo_config,
         train_dataset=dataset,
         tokenizer=tokenizer,

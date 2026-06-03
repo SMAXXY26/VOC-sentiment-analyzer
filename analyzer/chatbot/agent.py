@@ -12,6 +12,7 @@ EOC (end_conversation):   stores conversation summary to Qdrant, cleans up sessi
 Token budget (max_model_len=1024):
   system ~70 | tools ~220 | history ≤250 | tool results ≤280 chars | response ≤170
 """
+
 from __future__ import annotations
 
 import os
@@ -54,6 +55,7 @@ _INITIAL_QUICK_REPLIES = [
 
 # ── LangGraph state ────────────────────────────────────────────────────────────
 
+
 def _merge_messages(a: list, b: list) -> list:
     return a + b
 
@@ -63,6 +65,7 @@ class AgentState(TypedDict):
 
 
 # ── Graph ──────────────────────────────────────────────────────────────────────
+
 
 @lru_cache(maxsize=1)
 def _get_graph():
@@ -109,6 +112,7 @@ def _evict_expired() -> None:
 
 # ── SOC ────────────────────────────────────────────────────────────────────────
 
+
 def start_conversation(customer: dict | str = "guest") -> str:
     """SOC — create a new session. Accepts either an authenticated customer dict
     (from edbms.authenticate) or a plain customer_id string for anonymous sessions.
@@ -126,11 +130,11 @@ def start_conversation(customer: dict | str = "guest") -> str:
     try:
         if customer_dict.get("id"):
             from .edbms import get_recent_purchases
+
             orders = get_recent_purchases(customer_dict["id"])
             if orders:
                 recent = "; ".join(
-                    f"{o['order_ref']} {o['product']} ({o['status']})"
-                    + (f" [{o['issue']}]" if o.get("issue") else "")
+                    f"{o['order_ref']} {o['product']} ({o['status']})" + (f" [{o['issue']}]" if o.get("issue") else "")
                     for o in orders[:3]
                 )
                 memory.summary = f"Customer {customer_dict['name']} ({customer_dict['tier']}). Recent: {recent}"
@@ -138,9 +142,9 @@ def start_conversation(customer: dict | str = "guest") -> str:
         pass
 
     _sessions[session_id] = {
-        "memory":   memory,
+        "memory": memory,
         "customer": customer_dict,
-        "ts":       time.time(),
+        "ts": time.time(),
     }
     return session_id
 
@@ -153,6 +157,7 @@ def get_quick_replies(session_id: str) -> list[str]:
 
 
 # ── Chat ───────────────────────────────────────────────────────────────────────
+
 
 def chat(session_id: str, user_message: str) -> str:
     """Process one user turn. Sets _CURRENT_CUSTOMER for the duration of the call."""
@@ -185,8 +190,7 @@ def chat(session_id: str, user_message: str) -> str:
                     break
         except Exception:
             reply = (
-                "I'm having trouble resolving this automatically. "
-                "Let me connect you with a human agent who can help."
+                "I'm having trouble resolving this automatically. Let me connect you with a human agent who can help."
             )
 
         memory.add("assistant", reply)
@@ -206,6 +210,7 @@ def _ensure_chat_collection(client) -> None:
         from qdrant_client.models import Distance, VectorParams
 
         from vectordb.embedder import VECTOR_SIZE
+
         client.create_collection(
             collection_name=_CHAT_COLLECTION,
             vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
@@ -226,21 +231,24 @@ def end_conversation(session_id: str) -> str:
 
         from vectordb.client import get_client
         from vectordb.embedder import embed
+
         client = get_client()
         _ensure_chat_collection(client)
         client.upsert(
             collection_name=_CHAT_COLLECTION,
-            points=[PointStruct(
-                id=str(uuid.uuid4()),
-                vector=embed(summary),
-                payload={
-                    "session_id":  session_id,
-                    "customer_id": customer.get("username", "guest"),
-                    "summary":     summary,
-                    "turn_count":  memory.turn_count(),
-                    "ended_at":    time.time(),
-                },
-            )],
+            points=[
+                PointStruct(
+                    id=str(uuid.uuid4()),
+                    vector=embed(summary),
+                    payload={
+                        "session_id": session_id,
+                        "customer_id": customer.get("username", "guest"),
+                        "summary": summary,
+                        "turn_count": memory.turn_count(),
+                        "ended_at": time.time(),
+                    },
+                )
+            ],
         )
     except Exception:
         pass
@@ -250,6 +258,7 @@ def end_conversation(session_id: str) -> str:
 
 
 # ── Introspection ──────────────────────────────────────────────────────────────
+
 
 def get_history(session_id: str) -> list[dict] | None:
     if session_id not in _sessions:

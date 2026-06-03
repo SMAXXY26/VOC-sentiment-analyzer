@@ -13,6 +13,7 @@ depth, which round-robin can't). VLLM_ENDPOINTS is still read for backward
 compatibility, but if it lists more than one endpoint we warn and use the first —
 the correct fix is to list those endpoints in the *router's* VLLM_ENDPOINTS instead.
 """
+
 from __future__ import annotations
 
 import logging
@@ -103,6 +104,7 @@ _usage_callback = _UsageCallback()
 
 # ── Single inference endpoint (the router, or a direct vLLM) ─────────────────
 
+
 def _resolve_base_url() -> str:
     """The one base URL the analyzer sends inference to. The router load-balances
     behind it; we do NOT load-balance client-side."""
@@ -126,6 +128,7 @@ _BASE_URL: str = _resolve_base_url()
 
 
 # ── Cached LLM instances per temperature ─────────────────────────────────────
+
 
 @lru_cache(maxsize=16)
 def _llm_for_endpoint(endpoint: str, temperature: float) -> ChatOpenAI:
@@ -154,6 +157,7 @@ def _draft_llm(temperature: float) -> ChatOpenAI:
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
+
 
 def get_llm(temperature: float = 0.1, model: str | None = None) -> ChatOpenAI:
     """
