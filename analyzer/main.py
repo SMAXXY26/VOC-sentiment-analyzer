@@ -58,9 +58,12 @@ def analyze_single(
 
     fid = feedback_id or str(uuid.uuid4())
 
-    # Apply the producer's model routing hint for the whole pipeline run, then reset.
+    # Decide the model tier. The producer's keyword tag (`model`) is a cheap hint;
+    # the authoritative decision is model-based (1.5B router) via resolve_model_tier.
     from .llm import reset_target_model, set_target_model
-    token = set_target_model(model)
+    from .routing import resolve_model_tier
+    tier = resolve_model_tier(raw_text, hint=model)
+    token = set_target_model(tier)
     try:
         ctx = pipeline.invoke({"raw_text": raw_text, "feedback_id": fid})
     finally:
