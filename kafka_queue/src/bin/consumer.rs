@@ -160,9 +160,12 @@ async fn main() {
                                 "Unknown schema version — routing to DLT"
                             );
                             counter!("consumer_schema_version_errors_total").increment(1);
-                            send_to_dlt(&producer, &config.failed_topic, &job.feedback_id,
+                            let dlt_ok = send_to_dlt(&producer, &config.failed_topic, &job.feedback_id,
                                 "unknown_schema_version", &payload).await;
-                            consumer.commit_message(&msg, CommitMode::Async).ok();
+                            // Only commit if the bad message is safely in the DLT.
+                            if dlt_ok {
+                                consumer.commit_message(&msg, CommitMode::Async).ok();
+                            }
                             continue;
                         }
 
@@ -236,7 +239,7 @@ async fn process_job(
             error!(feedback_id = %job.feedback_id, reason = %reason, "Analysis failed after retries — sending to DLT");
             counter!("consumer_analyzer_errors_total", "reason" => "exhausted_retries")
                 .increment(1);
-            send_to_dlt(
+            let dlt_ok = send_to_dlt(
                 producer,
                 &config.failed_topic,
                 &job.feedback_id,
@@ -244,8 +247,13 @@ async fn process_job(
                 &raw_payload,
             )
             .await;
-            // Store offset only after DLT send — message is handled, not lost
-            consumer.store_offset(topic, partition, offset).ok();
+            // Commit ONLY if the DLT write succeeded. If it failed, leave the offset
+            // uncommitted so the message is redelivered rather than silently lost.
+            if dlt_ok {
+                consumer.store_offset(topic, partition, offset).ok();
+            } else {
+                warn!(feedback_id = %job.feedback_id, "DLT write failed — NOT committing offset (will reprocess)");
+            }
         }
         Ok(result_json) => {
             histogram!("consumer_analysis_duration_seconds").record(elapsed);
@@ -266,7 +274,7 @@ async fn process_job(
                     // does, don't panic the worker — DLT it and move on.
                     error!(feedback_id = %job.feedback_id, "Failed to serialize result: {e}");
                     counter!("consumer_serialize_errors_total").increment(1);
-                    send_to_dlt(
+                    let dlt_ok = send_to_dlt(
                         producer,
                         &config.failed_topic,
                         &job.feedback_id,
@@ -274,7 +282,11 @@ async fn process_job(
                         &raw_payload,
                     )
                     .await;
-                    consumer.store_offset(topic, partition, offset).ok();
+                    if dlt_ok {
+                        consumer.store_offset(topic, partition, offset).ok();
+                    } else {
+                        warn!(feedback_id = %job.feedback_id, "DLT write failed — NOT committing offset (will reprocess)");
+                    }
                     return;
                 }
             };
@@ -290,7 +302,7 @@ async fn process_job(
                 Err((e, _)) => {
                     error!(feedback_id = %job.feedback_id, "Failed to publish result: {e} — sending to DLT");
                     counter!("consumer_publish_errors_total").increment(1);
-                    send_to_dlt(
+                    let dlt_ok = send_to_dlt(
                         producer,
                         &config.failed_topic,
                         &job.feedback_id,
@@ -298,8 +310,12 @@ async fn process_job(
                         &raw_payload,
                     )
                     .await;
-                    // Store offset after DLT send — consistent with analysis-failure path
-                    consumer.store_offset(topic, partition, offset).ok();
+                    // Commit only if the DLT write succeeded (see analysis-failure path).
+                    if dlt_ok {
+                        consumer.store_offset(topic, partition, offset).ok();
+                    } else {
+                        warn!(feedback_id = %job.feedback_id, "DLT write failed — NOT committing offset (will reprocess)");
+                    }
                 }
                 Ok(_) => {
                     info!(
@@ -335,12 +351,15 @@ async fn call_analyzer_with_retry(
             tokio::time::sleep(delay).await;
         }
 
-        // Forward the producer's model routing hint (big/small) to the analyzer.
-        // Omitted (null) when absent so the analyzer uses its default model.
+        // Forward the feedback_id so the stored analysis keeps the SAME id end-to-end
+        // (was: analyzer minted a fresh UUID, breaking traceability between the Kafka
+        // job, the analyzed-topic result, and the Qdrant record). Also forward the
+        // producer's model routing hint (null when absent → analyzer's default model).
         match http
             .post(url)
             .json(&serde_json::json!({
                 "text": job.payload.text,
+                "feedback_id": job.feedback_id,
                 "model": job.target_model,
             }))
             .send()
@@ -521,13 +540,17 @@ mod tests {
 }
 
 /// Publish a failed message to the dead-letter topic.
+/// Returns true if the message was durably written to the DLT. The caller MUST NOT
+/// commit the source offset when this returns false — otherwise the message is lost
+/// (not in feedback.analyzed, not in feedback.failed, yet marked consumed).
+#[must_use]
 async fn send_to_dlt(
     producer: &FutureProducer,
     failed_topic: &str,
     feedback_id: &str,
     reason: &str,
     original_payload: &str,
-) {
+) -> bool {
     let dlt_msg = DeadLetterMessage {
         feedback_id: feedback_id.to_string(),
         reason: reason.to_string(),
@@ -539,7 +562,7 @@ async fn send_to_dlt(
         Err(e) => {
             error!(feedback_id = %feedback_id, "CRITICAL: failed to serialize DLT message: {e}");
             counter!("consumer_dlt_failures_total").increment(1);
-            return;
+            return false;
         }
     };
     match producer
@@ -554,10 +577,12 @@ async fn send_to_dlt(
         Ok(_) => {
             counter!("consumer_dlt_messages_total").increment(1);
             warn!(feedback_id = %feedback_id, reason = %reason, "Message sent to DLT");
+            true
         }
         Err((e, _)) => {
             error!(feedback_id = %feedback_id, "CRITICAL: Failed to send to DLT: {e}");
             counter!("consumer_dlt_failures_total").increment(1);
+            false
         }
     }
 }
