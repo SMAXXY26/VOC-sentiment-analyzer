@@ -27,3 +27,4 @@ duckduckgo-search
 bcrypt
 prometheus-client
 kafka-python
+datasets
