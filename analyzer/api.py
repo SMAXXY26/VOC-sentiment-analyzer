@@ -49,13 +49,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Prometheus scrape endpoint. Mounted as a sub-app so it bypasses the API-key
-# dependency (Prometheus can't send the header); add "/metrics" to the exempt set
-# for parity with /health and /ready.
-from prometheus_client import make_asgi_app  # noqa: E402
+# Prometheus scrape endpoint. Served as an explicit route (not app.mount, which
+# would make the real path "/metrics/" and answer "/metrics" with a 307 redirect —
+# Prometheus doesn't follow redirects on scrape, so it would silently get nothing).
+# Exempt from the API-key dependency so Prometheus can scrape without a header.
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest  # noqa: E402
 
 _EXEMPT_PATHS.add("/metrics")
-app.mount("/metrics", make_asgi_app())
+
+
+@app.get("/metrics")
+def metrics():
+    from fastapi import Response
+
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 class AnalyzeRequest(BaseModel):
