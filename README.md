@@ -27,22 +27,28 @@ Paste any customer feedback → get back structured intelligence in under 30 sec
 ```mermaid
 flowchart TD
     CF["Customer Feedback"] --> GW["Rust / Axum HTTP Gateway<br/>port 3001 · POST /feedback"]
-    GW -->|"feedback.raw"| RP["Redpanda<br/>(Kafka-compatible, no ZooKeeper)"]
+    GW -->|"feedback.raw<br/>(tagged big/small hint)"| RP["Redpanda<br/>(Kafka-compatible, no ZooKeeper)"]
     RP --> CONS["Rust Consumer"]
-    CONS --> API["FastAPI Analyzer<br/>port 8080"]
+    CONS -->|"text + feedback_id + model"| API["FastAPI Analyzer<br/>port 8080"]
     API --> PIPE["10-Stage LangChain LCEL Pipeline"]
     PIPE -->|"dedup · RAG · active learning"| QD[("Qdrant Vector DB")]
-    PIPE -->|"structured output"| VLLM["vLLM Server<br/>Qwen2.5-7B-AWQ · RTX 4070 8GB"]
+    PIPE -->|"OpenAI-compatible"| ROUTER["Rust Inference Router<br/>load-aware (queue depth)"]
+    ROUTER --> VLLM["vLLM backend(s)<br/>Qwen2.5-7B-AWQ · RTX 4070 8GB"]
     QD -.-> PIPE
-    VLLM -.-> PIPE
+    VLLM -.-> ROUTER -.-> PIPE
     PIPE -->|"feedback.analyzed"| RP
+    CONS -.->|"failures"| DLT["feedback.failed (DLT)<br/>+ dlt_replay redrive"]
     API --> DASH["Next.js Dashboard"]
 
     classDef store fill:#1e293b,stroke:#6366f1,color:#e2e8f0;
     classDef infer fill:#312e81,stroke:#818cf8,color:#e2e8f0;
     class QD store;
-    class VLLM,PIPE infer;
+    class VLLM,PIPE,ROUTER infer;
 ```
+
+Inference goes through the **Rust router**, which load-balances across vLLM backends by
+live queue depth (`vllm:num_requests_running` + `waiting`) — not client-side round-robin.
+The analyzer points `VLLM_BASE_URL` at the router and never load-balances itself.
 
 ### Pipeline Stages
 
@@ -79,6 +85,7 @@ flowchart LR
     end
     subgraph SRV["Server laptop · 192.168.1.3 · k3s"]
         direction TB
+        ROUTERK["Inference Router · :8100"]
         SVC["headless Service + Endpoints<br/>vllm:8000 → 192.168.1.11"]
         ANALY["Analyzer · :30080"]
         DASHK["Dashboard · :30300"]
@@ -86,11 +93,12 @@ flowchart LR
         RPK["Redpanda"]
         DRAFT["Draft LLM 1.5B · :8001<br/>(bare-metal)"]
     end
-    ANALY -->|"in-cluster DNS"| SVC
+    ANALY -->|"VLLM_BASE_URL"| ROUTERK
+    ROUTERK -->|"in-cluster DNS"| SVC
     SVC -.->|"LAN"| VLLM
     ANALY --> QDK
     ANALY --> RPK
-    ANALY --> DRAFT
+    ANALY -->|"model-based router"| DRAFT
     DASHK --> ANALY
 ```
 
@@ -114,16 +122,21 @@ LangGraph ReAct agent with **model cascade routing**:
 ```mermaid
 flowchart TD
     U["User message"] --> SOC["start_conversation (SOC)<br/>EDBMS login + stats snapshot"]
-    SOC --> CLF{"keyword<br/>classifier"}
+    SOC --> CLF{"1.5B model-based router<br/>(keyword fallback)"}
     CLF -->|"simple"| SMALL["Qwen2.5-1.5B · :8001"]
     CLF -->|"complex / emotional"| BIG["Qwen2.5-7B · :8000"]
-    SMALL --> AGENT["ReAct agent + 8 tools"]
+    SMALL --> AGENT["ReAct agent + 8 tools<br/>(call budget + timeouts)"]
     BIG --> AGENT
     AGENT -->|"tool call"| TOOLS["orders · refunds · FAQ · web_search · escalate"]
     TOOLS --> AGENT
     AGENT --> R["reply (≤180 tok)"]
     R --> EOC["end_conversation (EOC)<br/>summary vector → chat_sessions"]
 ```
+
+Routing is **model-based** (`analyzer/routing.py`): a low-token call to the 1.5B model
+classifies complex/simple, reading intent rather than keywords (e.g. "I'm fine, just
+want to cancel" → complex). The keyword list is only a fallback when the draft model is
+unavailable. Tools have a per-turn call budget (web_search capped) and wall-clock timeouts.
 
 Tools: `get_my_orders` · `lookup_purchase_context` · `get_account_info` · `log_complaint` · `request_refund` · `escalate_to_human` · `get_faq_answer` · `web_search` (DuckDuckGo, no API key)
 
@@ -149,8 +162,13 @@ Weighted score: taxonomy confidence (0.4) × sentiment consistency (0.3) × nove
 ### Agentic Review Workflow (`analyzer/review_agent.py`)
 Separate LangGraph agent that synthesises queue status, drift alerts, and escalation counts into a `ReviewReport` with action items and risk level.
 
-### Distributed Inference (`analyzer/llm.py`)
-Round-robin across multiple vLLM endpoints via `VLLM_ENDPOINTS` env var. Thread-safe, per-endpoint LRU cache.
+### Distributed Inference (`kafka_queue/src/bin/router.rs`)
+A load-aware Rust router is the single load balancer in front of the vLLM backends. It
+scrapes each backend's `vllm:num_requests_running` + `num_requests_waiting`, tracks an
+EWMA of queue depth plus in-flight requests it has dispatched, and routes each call to
+the least-loaded healthy backend (round-robin only as a cold-start fallback). It
+reverse-proxies the OpenAI-compatible request, streaming responses through. The analyzer
+points `VLLM_BASE_URL` at it and does **not** load-balance client-side.
 
 ---
 
@@ -356,11 +374,36 @@ bash training/merge_and_quantize.sh
 
 ---
 
+## Failure Recovery Matrix
+
+How the system behaves when each dependency fails — what detects it, what recovers it,
+and whether any data is lost. Exercised by `tests/test_fault_injection.py` and the
+alert rules in `monitoring/alerts.yml`.
+
+| Failure | Detected by | Recovery mechanism | Data loss? |
+|---|---|---|---|
+| **Qdrant down — dedup** | exception in `find_duplicates` | swallowed; pipeline runs full analysis (no cache, no crash) | None (just no dedup) |
+| **Qdrant down — store** | exception in `store_analysis` | analysis completes; result published to `feedback.store_retry` (Kafka), replayed by the retry consumer when Qdrant recovers; local file buffer if Kafka also down | None |
+| **vLLM down / slow** | analyzer 5xx; `/ready` 503; `vLLMHighTTFT` alert | consumer retries 3× w/ backoff → DLT; k8s stops routing on 503; router drops the unhealthy backend | None (DLT) |
+| **One vLLM backend overloaded** | router scrapes queue depth | router routes to the least-loaded healthy backend | None |
+| **Analyzer down** | consumer HTTP error | retry 3× → DLT → `dlt_replay` redrive | None (DLT) |
+| **Kafka publish fails (producer)** | `send()` error | `POST /feedback` returns 503 to the client (back-pressure) | None (client can resubmit) |
+| **Result publish fails (consumer)** | `send()` error | message → DLT; offset committed only on DLT success | None |
+| **DLT publish fails** | `send_to_dlt` → false | **offset NOT committed** → message redelivered | None |
+| **Bad schema / undecodable msg** | schema-version / decode guard | → DLT (permanent), logged; never auto-replayed | Quarantined, inspectable |
+| **Draft (1.5B) model down** | exception in routing/`get_llm` | routing falls back to keywords; analysis falls back to the big model | None (degraded routing) |
+| **Tool hangs (e.g. web_search)** | `TOOL_TIMEOUT_SECONDS` | tool returns a graceful timeout message; budget caps repeat calls | None |
+| **Agent loops** | `recursion_limit` | graph stops; graceful "connect to a human" reply | None |
+| **DLT backlog grows** | `DeadLetterMessages` / `Flood` alerts | `dlt_replay` CronJob redrives transient failures every 15m | None |
+
+---
+
 ## Architectural Tradeoffs
 
 | Decision | Chosen | Alternative | Why |
 |---|---|---|---|
-| Model cascade | App-level keyword routing | vLLM speculative decoding | vLLM spec decode is single-machine; draft and target are on different GPUs |
+| Model cascade | 1.5B model-based routing (keyword fallback) | vLLM speculative decoding | vLLM spec decode is single-machine; draft and target are on different GPUs |
+| Inference LB | Load-aware Rust router (queue depth) | Client-side round-robin | Round-robin is blind to load; the router routes to the least-loaded backend |
 | Session store | In-process dict + TTL | Redis / LangGraph CheckpointSaver | No extra infra; single-instance k3s deployment |
 | Customer DB | SQLite (auto-seeded) | PostgreSQL | Zero infra overhead for demo; portable if scale requires |
 | Fine-tuning | QLoRA (4-bit + LoRA r=16) | Full SFT / FSDP | 8GB VRAM can't hold 7B BF16 in training mode |
