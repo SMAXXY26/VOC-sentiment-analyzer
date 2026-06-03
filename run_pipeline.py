@@ -77,11 +77,19 @@ def main():
     parser.add_argument("--out", required=True, help="Output JSON file path")
     parser.add_argument("--no-trends", action="store_true",
                         help="Skip trend aggregation (faster for single items)")
+    parser.add_argument("--semantic-schedule", action="store_true",
+                        help="Reorder the batch by semantic similarity to maximize vLLM "
+                             "prefix-cache reuse (needs vLLM --enable-prefix-caching)")
     args = parser.parse_args()
 
     console.print(f"[bold cyan]Loading records from {args.source}...[/bold cyan]")
     records = load_records(args)
     console.print(f"[green]Loaded {len(records)} feedback records[/green]")
+
+    if args.semantic_schedule and len(records) > 2:
+        from analyzer.scheduler import schedule
+        records = schedule(records, key=lambda r: r.text)
+        console.print("[cyan]Reordered batch by semantic similarity (prefix-cache friendly)[/cyan]")
 
     analyses = []
     for record in track(records, description="Analyzing..."):

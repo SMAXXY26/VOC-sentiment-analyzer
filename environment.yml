@@ -27,3 +27,4 @@ dependencies:
       - langdetect
       - prometheus-client
       - kafka-python
+      - datasets
