@@ -129,6 +129,20 @@ async def analyze(req: AnalyzeRequest):
     return await asyncio.to_thread(analyze_single, req.text, req.feedback_id, req.model)
 
 
+# Seed/backfill data is tagged with this payload `source` and hidden from the dashboard
+# views (/analyses, /analyses/summary) while still feeding dedup/RAG/clustering/drift.
+SEED_SOURCE = os.getenv("SEED_SOURCE", "hf_seed")
+
+
+def _exclude_seed_filter():
+    """A Qdrant scroll filter that drops seed-tagged points (None if seeding disabled)."""
+    if not SEED_SOURCE:
+        return None
+    from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+    return Filter(must_not=[FieldCondition(key="source", match=MatchValue(value=SEED_SOURCE))])
+
+
 @app.get("/analyses")
 def list_analyses(limit: int = 50, offset: int = 0, q: Optional[str] = None):
     try:
@@ -137,10 +151,13 @@ def list_analyses(limit: int = 50, offset: int = 0, q: Optional[str] = None):
 
         if q and q.strip():
             results = search(q.strip(), k=limit)
+            # search() has no payload filter, so drop seed items here.
+            results = [r for r in results if r.get("source") != SEED_SOURCE]
             return {"items": results, "total": len(results)}
         client = get_client()
         points, _ = client.scroll(
             collection_name=ANALYSES_COLLECTION,
+            scroll_filter=_exclude_seed_filter(),
             limit=limit,
             offset=offset,
             with_payload=True,
@@ -154,14 +171,15 @@ def list_analyses(limit: int = 50, offset: int = 0, q: Optional[str] = None):
 def analyses_summary():
     try:
         from vectordb.client import ANALYSES_COLLECTION, get_client
-        from vectordb.store import get_feature_history
 
         client = get_client()
         all_points = []
         offset = None
+        seed_filter = _exclude_seed_filter()
         while True:
             batch, next_offset = client.scroll(
                 collection_name=ANALYSES_COLLECTION,
+                scroll_filter=seed_filter,
                 limit=250,
                 offset=offset,
                 with_payload=True,
@@ -177,6 +195,13 @@ def analyses_summary():
         escalation_count = sum(1 for p in all_points if p.payload.get("escalate"))
         churn_count = sum(1 for p in all_points if p.payload.get("churn_risk"))
 
+        # Aggregate feature requests from the SAME filtered points (not a separate
+        # unfiltered scan) so seed-derived features don't leak onto the dashboard.
+        feature_counts: Counter = Counter()
+        for p in all_points:
+            for feat in p.payload.get("feature_requests") or []:
+                feature_counts[feat] += 1
+
         return {
             "total": len(all_points),
             "sentiment_distribution": dict(sentiments),
@@ -184,7 +209,7 @@ def analyses_summary():
             "churn_count": churn_count,
             "avg_intensity": round(sum(intensities) / len(intensities), 1) if intensities else 0,
             "top_categories": dict(categories.most_common(5)),
-            "top_feature_requests": get_feature_history(k=20),
+            "top_feature_requests": [f for f, _ in feature_counts.most_common(20)],
         }
     except Exception as e:
         return {"total": 0, "error": str(e)}

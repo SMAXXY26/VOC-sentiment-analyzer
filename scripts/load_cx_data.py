@@ -39,7 +39,14 @@ def main():
     p.add_argument("--rating-field", default=None)
     p.add_argument("--limit", type=int, default=200, help="max rows to ingest (keeps GPU time bounded)")
     p.add_argument("--semantic-schedule", action="store_true", help="reorder by similarity for prefix-cache reuse")
+    p.add_argument(
+        "--seed-source",
+        default="hf_seed",
+        help="payload 'source' marker; the dashboard hides this value while "
+        "dedup/RAG/clustering/drift still use the data. Set empty to show it.",
+    )
     args = p.parse_args()
+    seed_source = args.seed_source or None
 
     console.print(f"[bold cyan]Fetching up to {args.limit} rows from {args.dataset}...[/bold cyan]")
     records = HFDatasetIngester(
@@ -60,13 +67,16 @@ def main():
     stored = 0
     for rec in track(records, description="Analyzing → Qdrant..."):
         try:
-            analyze_single(rec.text)  # store_result_stage persists to feedback_analyses
+            # Tagged with seed_source so the dashboard excludes it (store_result persists
+            # source into the feedback_analyses payload).
+            analyze_single(rec.text, source=seed_source)
             stored += 1
         except Exception as exc:
             console.print(f"[yellow]skip: {str(exc)[:80]}[/yellow]")
 
-    console.print(f"[bold green]Done. {stored}/{len(records)} analyses stored to Qdrant.[/bold green]")
-    console.print("Verify: GET /analyses/summary  ·  POST /cluster  ·  GET /drift")
+    tag = f" (source={seed_source}, hidden from dashboard)" if seed_source else ""
+    console.print(f"[bold green]Done. {stored}/{len(records)} analyses stored to Qdrant{tag}.[/bold green]")
+    console.print("Used by: POST /cluster · GET /drift · GET /search · dedup/RAG (dashboard hides seed)")
 
 
 if __name__ == "__main__":
