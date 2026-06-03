@@ -13,7 +13,12 @@ from .schemas import FeedbackAnalysis
 console = Console()
 
 
-def analyze_single(raw_text: str, feedback_id: str | None = None, model: str | None = None) -> FeedbackAnalysis:
+def analyze_single(
+    raw_text: str,
+    feedback_id: str | None = None,
+    model: str | None = None,
+    source: str | None = None,
+) -> FeedbackAnalysis:
     import time
 
     from .metrics import (
@@ -62,8 +67,14 @@ def analyze_single(raw_text: str, feedback_id: str | None = None, model: str | N
 
     tier = resolve_model_tier(raw_text, hint=model)
     token = set_target_model(tier)
+    # `source` is carried into the stored payload (store_result reads ctx["source"]).
+    # Seed/backfill loaders set it to a marker (e.g. "hf_seed") so the dashboard can
+    # exclude it while dedup/RAG/clustering/drift still use the corpus.
+    invoke_input = {"raw_text": raw_text, "feedback_id": fid}
+    if source is not None:
+        invoke_input["source"] = source
     try:
-        ctx = pipeline.invoke({"raw_text": raw_text, "feedback_id": fid})
+        ctx = pipeline.invoke(invoke_input)
     finally:
         reset_target_model(token)
     result = FeedbackAnalysis(
