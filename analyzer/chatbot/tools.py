@@ -8,11 +8,74 @@ Tool outputs are kept ≤280 chars to stay within the 1024-token vLLM budget.
 """
 from __future__ import annotations
 
+import functools
+import os
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from contextvars import ContextVar
 
 from langchain_core.tools import tool
 
 _CURRENT_CUSTOMER: ContextVar[dict] = ContextVar("current_customer", default={})
+
+# ── Tool guards: per-turn call budget + per-call timeout ────────────────────────
+# Two failure modes this prevents:
+#   1. A runaway agent calling an expensive/external tool (web_search) repeatedly,
+#      burning the token budget and latency. Capped per conversation turn.
+#   2. A tool hanging indefinitely (DuckDuckGo has no built-in timeout), wedging the
+#      whole chat request. Each tool body runs with a hard wall-clock timeout.
+
+_TOOL_CALLS: ContextVar[dict] = ContextVar("tool_calls", default={})
+
+TOOL_TIMEOUT_SECONDS = float(os.getenv("TOOL_TIMEOUT_SECONDS", "8"))
+WEB_SEARCH_MAX_CALLS = int(os.getenv("WEB_SEARCH_MAX_CALLS", "1"))
+
+# Daemon pool so a hung tool thread never blocks process exit.
+_TOOL_POOL = ThreadPoolExecutor(max_workers=8, thread_name_prefix="tool")
+
+
+def reset_tool_budget() -> None:
+    """Start a fresh per-turn call budget. Called by agent.chat() each turn."""
+    _TOOL_CALLS.set({})
+
+
+def _guarded(max_calls: int | None = None, timeout: float | None = None):
+    """Wrap a tool function with a per-turn call cap and a wall-clock timeout.
+
+    Applied *under* @tool so functools.wraps preserves the name/signature/docstring
+    that LangChain reads to build the tool schema.
+    """
+
+    def decorator(fn):
+        limit = timeout if timeout is not None else TOOL_TIMEOUT_SECONDS
+
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            calls = _TOOL_CALLS.get()
+            used = calls.get(fn.__name__, 0)
+            if max_calls is not None and used >= max_calls:
+                return (
+                    f"(Skipped: '{fn.__name__}' already used {used}× this turn — "
+                    "answer from what you already have.)"
+                )[:280]
+            calls[fn.__name__] = used + 1
+
+            # ContextVars don't propagate into pool threads automatically, so copy
+            # the current context (carries _CURRENT_CUSTOMER) into the worker.
+            import contextvars
+
+            ctx = contextvars.copy_context()
+            future = _TOOL_POOL.submit(ctx.run, fn, *args, **kwargs)
+            try:
+                return future.result(timeout=limit)
+            except FutureTimeout:
+                return f"(Tool '{fn.__name__}' timed out after {limit:.0f}s — try rephrasing.)"[:280]
+            except Exception as exc:
+                return f"(Tool '{fn.__name__}' error: {exc})"[:280]
+
+        return wrapper
+
+    return decorator
 
 _FAQ: dict[str, str] = {
     "cancel":        "Orders can be cancelled within 2 minutes of placing. Go to Orders → Cancel Order.",
@@ -37,6 +100,7 @@ def _uid() -> int | None:
 # ── EDBMS-backed tools ─────────────────────────────────────────────────────────
 
 @tool
+@_guarded()
 def get_account_info() -> str:
     """Get the current customer's account details: membership tier, join date, email."""
     uid = _uid()
@@ -50,6 +114,7 @@ def get_account_info() -> str:
 
 
 @tool
+@_guarded()
 def get_my_orders() -> str:
     """Get the customer's recent purchase history with status and any reported issues."""
     uid = _uid()
@@ -67,6 +132,7 @@ def get_my_orders() -> str:
 
 
 @tool
+@_guarded()
 def lookup_purchase_context(keywords: str) -> str:
     """Search the customer's recent purchases for context about a specific product or issue.
     Use when the customer mentions a product name, delivery problem, or issue type.
@@ -87,6 +153,7 @@ def lookup_purchase_context(keywords: str) -> str:
 
 
 @tool
+@_guarded()
 def log_complaint(order_ref: str, complaint_type: str, description: str) -> str:
     """Log a complaint for a purchase.
     complaint_type: wrong_item | missing_item | quality | late_delivery | damaged | other"""
@@ -102,6 +169,7 @@ def log_complaint(order_ref: str, complaint_type: str, description: str) -> str:
 
 
 @tool
+@_guarded()
 def request_refund(order_ref: str, reason: str) -> str:
     """Request a refund for a purchase. Provide the order reference and reason."""
     uid = _uid()
@@ -116,6 +184,7 @@ def request_refund(order_ref: str, reason: str) -> str:
 
 
 @tool
+@_guarded()
 def escalate_to_human(order_ref: str, reason: str) -> str:
     """Escalate to a human support agent when you cannot resolve the issue yourself."""
     uid = _uid()
@@ -130,6 +199,7 @@ def escalate_to_human(order_ref: str, reason: str) -> str:
 
 
 @tool
+@_guarded()
 def get_faq_answer(topic: str) -> str:
     """Answer common questions. Topics: cancel, refund, delivery_time, contact, track, payment, missing_item, late_delivery"""
     topic = topic.lower().strip()
@@ -140,6 +210,7 @@ def get_faq_answer(topic: str) -> str:
 
 
 @tool
+@_guarded(max_calls=WEB_SEARCH_MAX_CALLS)
 def web_search(query: str) -> str:
     """Search the web for product information, company policies, or general questions.
     Use for questions about products, shipping policies, or anything not in the FAQ."""

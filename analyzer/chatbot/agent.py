@@ -14,6 +14,7 @@ Token budget (max_model_len=1024):
 """
 from __future__ import annotations
 
+import os
 import time
 import uuid
 from functools import lru_cache
@@ -25,7 +26,12 @@ from langgraph.prebuilt import ToolNode
 
 from .cascade_llm import get_chat_llm
 from .memory import ConversationMemory
-from .tools import _CURRENT_CUSTOMER, TOOLS
+from .tools import _CURRENT_CUSTOMER, TOOLS, reset_tool_budget
+
+# Cap on agent_node↔tools loop iterations per turn. LangGraph counts each node hop,
+# so N covers roughly N/2 tool rounds — enough for a multi-tool answer, but it stops
+# a model that loops forever calling tools. Configurable via env.
+_RECURSION_LIMIT = int(os.getenv("CHATBOT_RECURSION_LIMIT", "8"))
 
 _SYSTEM = (
     "You are a helpful, empathetic customer support assistant. "
@@ -159,18 +165,29 @@ def chat(session_id: str, user_message: str) -> str:
     session["ts"] = time.time()
 
     token = _CURRENT_CUSTOMER.set(customer)
+    reset_tool_budget()  # fresh per-turn tool-call budget (caps web_search etc.)
     try:
         memory.add("user", user_message)
         messages: list[BaseMessage] = [SystemMessage(content=_SYSTEM)]
         messages += memory.to_langchain_messages()
 
-        result = _get_graph().invoke({"messages": messages})
-
-        reply = "I'm sorry, I couldn't process that. Please try again."
-        for msg in reversed(result["messages"]):
-            if isinstance(msg, AIMessage) and not getattr(msg, "tool_calls", None):
-                reply = str(msg.content) or reply
-                break
+        # recursion_limit bounds the agent↔tools loop; on overrun LangGraph raises
+        # GraphRecursionError, which we turn into a graceful escalation message.
+        try:
+            result = _get_graph().invoke(
+                {"messages": messages},
+                config={"recursion_limit": _RECURSION_LIMIT},
+            )
+            reply = "I'm sorry, I couldn't process that. Please try again."
+            for msg in reversed(result["messages"]):
+                if isinstance(msg, AIMessage) and not getattr(msg, "tool_calls", None):
+                    reply = str(msg.content) or reply
+                    break
+        except Exception:
+            reply = (
+                "I'm having trouble resolving this automatically. "
+                "Let me connect you with a human agent who can help."
+            )
 
         memory.add("assistant", reply)
         return reply
