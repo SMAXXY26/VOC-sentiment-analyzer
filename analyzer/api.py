@@ -41,6 +41,7 @@ app.mount("/metrics", make_asgi_app())
 class AnalyzeRequest(BaseModel):
     text: str
     feedback_id: Optional[str] = None
+    model: Optional[str] = None  # producer routing hint: "big" | "small"
 
 
 @app.get("/health")
@@ -92,7 +93,7 @@ async def analyze(req: AnalyzeRequest):
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="text is required")
     # Run CPU-bound pipeline in a thread so the async event loop isn't blocked
-    return await asyncio.to_thread(analyze_single, req.text, req.feedback_id)
+    return await asyncio.to_thread(analyze_single, req.text, req.feedback_id, req.model)
 
 
 @app.get("/analyses")

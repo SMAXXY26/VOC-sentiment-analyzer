@@ -1,9 +1,9 @@
-# Secrets
+# ── Secrets & local config ─────────────────────────────────────────────────────
 .env
 *.env
 .env.*
 
-# Python
+# ── Python ─────────────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
@@ -14,27 +14,50 @@ build/
 venv/
 .venv/
 
-# Node / Next.js
+# ── Node / Next.js ─────────────────────────────────────────────────────────────
 dashboard/node_modules/
 dashboard/.next/
 
-# Rust build output
+# ── Rust build output ──────────────────────────────────────────────────────────
 kafka_queue/target/
 
-# Model weights / HuggingFace cache
+# ── Model weights & caches ─────────────────────────────────────────────────────
 .hf_cache/
 *.bin
 *.safetensors
 *.gguf
+*.pt
+*.pth
 
-# Docker / build artifacts
-build.log
-vllm.log
+# ── Fine-tuning artifacts (large binaries / generated data) ────────────────────
+training/data/
+training/checkpoints/
+training/merged/
+training/quantized/
+
+# ── SQLite databases (auto-created on first run, contain only demo seed data) ───
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Benchmark result JSON files (machine-specific, re-run to reproduce) ─────────
 results_*.json
 
-# Editor
+# ── Personal / local scratch files ─────────────────────────────────────────────
+cv.tex
+data.csv
+data.xlsx
+STEPS.md
+CLAUDE.md
+
+# ── IDE & editor config ────────────────────────────────────────────────────────
 .vscode/
 .idea/
+.cursor/
 
-# Claude
+# ── Docker / build logs ────────────────────────────────────────────────────────
+build.log
+vllm.log
+
+# ── Claude Code internal ───────────────────────────────────────────────────────
 .claude/

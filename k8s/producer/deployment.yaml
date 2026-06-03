@@ -29,6 +29,15 @@ spec:
               value: "0.0.0.0:9001"
             - name: RUST_LOG
               value: "info"
+            # Fleet health probes (in-cluster DNS). Defaults match these if unset.
+            - name: ANALYZER_HEALTH_URL
+              value: "http://analyzer:8080/ready"
+            - name: VLLM_HEALTH_URL
+              value: "http://vllm:8000/health"
+            # Enable small/big model routing by pointing at the draft endpoint.
+            # Leave unset to route everything to the big model (safe default).
+            - name: DRAFT_LLM_URL
+              value: "http://draft-llm:8001"
           ports:
             - containerPort: 3001
             - containerPort: 9001

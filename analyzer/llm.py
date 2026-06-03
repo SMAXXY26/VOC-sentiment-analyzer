@@ -21,6 +21,7 @@ Backward-compatibility note:
 from __future__ import annotations
 
 import os
+from contextvars import ContextVar
 from functools import lru_cache
 from itertools import cycle
 from threading import Lock
@@ -30,6 +31,29 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
 load_dotenv()
+
+
+# ── Model routing ────────────────────────────────────────────────────────────
+# The Rust producer tags each job with target_model ("big" | "small"); the
+# analyzer threads that into this ContextVar so every get_llm() call inside the
+# pipeline resolves to the same model for the duration of one analysis — without
+# having to pass `model` through all 8 stages. Default None = big model.
+_target_model: ContextVar[str | None] = ContextVar("target_model", default=None)
+
+
+def set_target_model(model: str | None):
+    """Set the per-request model hint; returns the token for reset() in a finally."""
+    return _target_model.set(model)
+
+
+def reset_target_model(token) -> None:
+    _target_model.reset(token)
+
+
+# Draft (small) model — same env var the chatbot cascade uses, so a single
+# deployment serves both. If unset, "small" silently falls back to the big model.
+_DRAFT_URL: str = os.getenv("DRAFT_LLM_URL", "").rstrip("/")
+_DRAFT_MODEL: str = os.getenv("DRAFT_MODEL_NAME", "Qwen/Qwen2.5-1.5B-Instruct-AWQ")
 
 
 # ── Endpoint pool ──────────────────────────────────────────────────────────────
@@ -65,13 +89,39 @@ def _llm_for_endpoint(endpoint: str, temperature: float) -> ChatOpenAI:
     )
 
 
+@lru_cache(maxsize=4)
+def _draft_llm(temperature: float) -> ChatOpenAI:
+    base = _DRAFT_URL if _DRAFT_URL.endswith("/v1") else _DRAFT_URL + "/v1"
+    return ChatOpenAI(
+        model=_DRAFT_MODEL,
+        base_url=base,
+        api_key="dummy",
+        temperature=temperature,
+        max_retries=2,
+    )
+
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 
-def get_llm(temperature: float = 0.1) -> ChatOpenAI:
+def get_llm(temperature: float = 0.1, model: str | None = None) -> ChatOpenAI:
     """
-    Return a ChatOpenAI instance pointed at the next vLLM endpoint (round-robin).
-    With a single endpoint this is equivalent to the original lru_cache singleton.
+    Return a ChatOpenAI instance for this analysis.
+
+    Model selection (in priority order):
+      1. explicit `model` arg
+      2. the per-request ContextVar set from the job's target_model
+      3. "big" (default)
+
+    "small" routes to the draft model when DRAFT_LLM_URL is configured, else falls
+    back to the big model. "big"/None round-robins across the main vLLM endpoints —
+    identical to the original behaviour when no routing hint is present.
     """
+    target = model or _target_model.get()
+    if target == "small" and _DRAFT_URL:
+        try:
+            return _draft_llm(temperature)
+        except Exception:
+            pass  # draft unreachable → fall through to big model
     return _llm_for_endpoint(_next_endpoint(), temperature)
 
 
