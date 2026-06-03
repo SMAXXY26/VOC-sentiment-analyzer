@@ -4,7 +4,11 @@ metadata:
   name: analyzer-config
   namespace: cx-pipeline
 data:
-  VLLM_BASE_URL: "http://vllm:8000/v1"
+  # Inference goes through the load-aware Rust router (k8s/router/), which proxies
+  # to the real vLLM GPU backends listed in its VLLM_ENDPOINTS. Do NOT also set
+  # VLLM_ENDPOINTS here — the analyzer should treat the router as a single endpoint
+  # and let it do the load balancing. Point straight at vllm:8000 to bypass it.
+  VLLM_BASE_URL: "http://router:8100/v1"
   QDRANT_URL: "http://qdrant:6333"
   EMBEDDER_URL: "http://embedder:8081"
   MODEL_NAME: "Qwen/Qwen2.5-7B-Instruct-AWQ"

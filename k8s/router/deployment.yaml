@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: router
+  namespace: cx-pipeline
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: router
+  template:
+    metadata:
+      labels:
+        app: router
+    spec:
+      containers:
+        - name: router
+          # Same cx-gateway image as producer/consumer — third binary.
+          image: cx-router
+          imagePullPolicy: Never
+          command: ["router"]
+          env:
+            # Real vLLM GPU backends. Add more comma-separated as the fleet grows;
+            # the router load-balances across them by live queue depth.
+            - name: VLLM_ENDPOINTS
+              value: "http://vllm:8000/v1"
+            - name: ROUTER_ADDR
+              value: "0.0.0.0:8100"
+            - name: METRICS_ADDR
+              value: "0.0.0.0:9003"
+            - name: SCRAPE_INTERVAL_MS
+              value: "1000"
+            - name: RUST_LOG
+              value: "info"
+          ports:
+            - containerPort: 8100
+            - containerPort: 9003
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8100
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+            requests:
+              memory: "32Mi"
+              cpu: "50m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: router
+  namespace: cx-pipeline
+spec:
+  selector:
+    app: router
+  ports:
+    - name: proxy
+      port: 8100
+      targetPort: 8100
+    - name: metrics
+      port: 9003
+      targetPort: 9003
