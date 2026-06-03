@@ -135,6 +135,69 @@
           "legendFormat": "avg batch size"
         }
       ]
+    },
+    {
+      "id": 11,
+      "title": "Dedup Cache Hit Ratio",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 20, "w": 6, "h": 6 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } },
+      "targets": [
+        {
+          "expr": "rate(dedup_cache_hits_total[5m]) / (rate(dedup_cache_hits_total[5m]) + rate(dedup_cache_misses_total[5m]))",
+          "legendFormat": "hit ratio"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Pipeline E2E Latency (computed, p50/p95/p99)",
+      "type": "timeseries",
+      "gridPos": { "x": 6, "y": 20, "w": 12, "h": 6 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(pipeline_request_duration_seconds_bucket{outcome=\"computed\"}[5m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(pipeline_request_duration_seconds_bucket{outcome=\"computed\"}[5m]))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(pipeline_request_duration_seconds_bucket{outcome=\"computed\"}[5m]))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Cache Hit vs Miss / sec",
+      "type": "timeseries",
+      "gridPos": { "x": 18, "y": 20, "w": 6, "h": 6 },
+      "targets": [
+        {
+          "expr": "rate(dedup_cache_hits_total[1m])",
+          "legendFormat": "hits/s"
+        },
+        {
+          "expr": "rate(dedup_cache_misses_total[1m])",
+          "legendFormat": "misses/s"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Per-Stage Latency p95",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 26, "w": 24, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, stage) (rate(pipeline_stage_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{stage}}"
+        }
+      ]
     }
   ]
 }

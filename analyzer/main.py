@@ -12,6 +12,15 @@ console = Console()
 
 
 def analyze_single(raw_text: str, feedback_id: str | None = None) -> FeedbackAnalysis:
+    import time
+    from .metrics import (
+        DEDUP_CACHE_HITS,
+        DEDUP_CACHE_MISSES,
+        PIPELINE_REQUEST_DURATION,
+    )
+
+    req_start = time.perf_counter()
+
     # Short-circuit: check for duplicate BEFORE running the expensive LLM pipeline.
     # Previously this check ran after pipeline.invoke(), so all 10 LLM stages fired
     # regardless, and FeedbackAnalysis(**hits[0]["analysis"]) always raised KeyError
@@ -24,9 +33,16 @@ def analyze_single(raw_text: str, feedback_id: str | None = None) -> FeedbackAna
         if matches:
             cached = get_analysis_by_id(matches[0])
             if cached:
+                DEDUP_CACHE_HITS.inc()
+                PIPELINE_REQUEST_DURATION.labels(outcome="cache_hit").observe(
+                    time.perf_counter() - req_start
+                )
                 return cached
     except Exception:
         pass  # never block if Qdrant is unavailable
+
+    # Reached only when no cached duplicate was served — full pipeline runs.
+    DEDUP_CACHE_MISSES.inc()
 
     fid = feedback_id or str(uuid.uuid4())
     ctx = pipeline.invoke({"raw_text": raw_text, "feedback_id": fid})
@@ -51,6 +67,9 @@ def analyze_single(raw_text: str, feedback_id: str | None = None) -> FeedbackAna
         except Exception:
             pass
 
+    PIPELINE_REQUEST_DURATION.labels(outcome="computed").observe(
+        time.perf_counter() - req_start
+    )
     return result
 
 

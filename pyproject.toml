@@ -1,0 +1,22 @@
+[tool.ruff]
+# Match the existing code's generous line length — this codebase has long
+# f-strings and descriptive comments; don't force a churny reformat.
+line-length = 120
+target-version = "py310"
+extend-exclude = ["build.log", "training/checkpoints", ".hf_cache"]
+
+[tool.ruff.lint]
+# Conservative starter set: real bugs (F), import hygiene (I), and the most
+# useful pyflakes/pycodestyle errors. Kept small on purpose so CI is a gate,
+# not a nag — expand once the tree is clean.
+select = ["E4", "E7", "E9", "F", "I"]
+# F401 in __init__.py re-exports and the deliberate broad excepts are idiomatic here.
+ignore = ["E402"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]
+"tests/*" = ["F401", "F811"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["live: requires vLLM running on localhost:8000"]

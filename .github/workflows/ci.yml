@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  python:
+    name: Python lint + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install ruff
+        run: pipx install ruff
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      # The test suite is mocked (no vLLM / Qdrant needed), but it still imports
+      # the analyzer package, so install its runtime deps. vllm is a heavy GPU
+      # wheel that won't install on CI runners and isn't needed for mocked tests —
+      # skip it and install the rest.
+      - name: Install test deps
+        run: |
+          grep -vE '^(vllm|https://)' requirements.txt > ci-requirements.txt
+          pip install -r ci-requirements.txt
+          python -m spacy download en_core_web_sm
+
+      - name: Pytest (mocked)
+        run: python -m pytest tests/test_pipeline.py -v
+
+  rust:
+    name: Rust fmt + clippy + tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kafka_queue
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install librdkafka build deps
+        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev
+
+      - name: cargo fmt
+        run: cargo fmt --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: cargo test
+        run: cargo test

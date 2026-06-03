@@ -29,6 +29,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Prometheus scrape endpoint. Mounted as a sub-app so it bypasses the API-key
+# dependency (Prometheus can't send the header); add "/metrics" to the exempt set
+# for parity with /health and /ready.
+from prometheus_client import make_asgi_app  # noqa: E402
+
+_EXEMPT_PATHS.add("/metrics")
+app.mount("/metrics", make_asgi_app())
+
 
 class AnalyzeRequest(BaseModel):
     text: str
