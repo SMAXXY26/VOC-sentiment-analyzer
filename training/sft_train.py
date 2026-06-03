@@ -32,7 +32,10 @@ def main():
     from trl import SFTConfig, SFTTrainer
     from unsloth import FastLanguageModel
 
-    print(f"Loading base model: {args.model}")
+    from training._report import banner, step, summary
+
+    banner("QLoRA SFT", f"{args.model} · r={args.lora_r} · {args.epochs} epoch(s)")
+    step(f"Loading base model: {args.model}")
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model,
         max_seq_length=MAX_SEQ_LEN,
@@ -54,9 +57,9 @@ def main():
         random_state=42,
     )
 
-    print(f"Loading dataset: {args.data}")
+    step(f"Loading dataset: {args.data}")
     dataset = load_dataset("json", data_files=args.data, split="train")
-    print(f"  {len(dataset)} training examples")
+    step(f"{len(dataset)} training examples")
 
     def format_sharegpt(example):
         convs = example["conversations"]
@@ -99,13 +102,19 @@ def main():
         args=training_args,
     )
 
-    print("Starting SFT training...")
+    step("Starting SFT training...")
     trainer.train()
 
-    print(f"\nSaving adapter to {args.output_dir}")
+    step(f"Saving adapter to {args.output_dir}")
     model.save_pretrained(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
-    print("Done. Run merge_lora.py next to merge weights before quantization.")
+    summary(
+        "SFT complete",
+        examples=len(dataset),
+        epochs=args.epochs,
+        adapter=args.output_dir,
+        next_step="merge_lora.py → quantize_awq.py",
+    )
 
 
 if __name__ == "__main__":

@@ -75,11 +75,14 @@ def main():
 
     os.environ["QDRANT_URL"] = args.qdrant_url
 
+    from training._report import banner, step, summary
     from vectordb.client import ANALYSES_COLLECTION, get_client
+
+    banner("SFT data export", "Qdrant feedback_analyses → ShareGPT JSONL")
     client = get_client()
 
-    print(f"Connecting to Qdrant at {args.qdrant_url}")
-    print(f"Scanning up to {args.limit} points with pipeline_confidence >= {args.min_confidence}")
+    step(f"Connecting to Qdrant at {args.qdrant_url}")
+    step(f"Scanning up to {args.limit} points with pipeline_confidence >= {args.min_confidence}")
 
     points, _ = client.scroll(
         collection_name=ANALYSES_COLLECTION,
@@ -129,12 +132,14 @@ def main():
             f.write(json.dumps(record) + "\n")
             written += 1
 
-    print("\nDone.")
-    print(f"  Written            : {written}")
-    print(f"  Skipped (low conf) : {skipped_low_confidence}")
-    print(f"  Skipped (no text)  : {skipped_no_text}")
-    print(f"  Skipped (no json)  : {skipped_no_json}")
-    print(f"  Output             : {args.out}")
+    summary(
+        "SFT export complete",
+        written=written,
+        skipped_low_confidence=skipped_low_confidence,
+        skipped_no_text=skipped_no_text,
+        skipped_no_json=skipped_no_json,
+        output=args.out,
+    )
 
 
 if __name__ == "__main__":

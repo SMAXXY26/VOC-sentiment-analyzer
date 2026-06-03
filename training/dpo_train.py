@@ -31,7 +31,10 @@ def main():
     from trl import DPOConfig, DPOTrainer
     from unsloth import FastLanguageModel
 
-    print(f"Loading SFT adapter from: {args.sft_adapter}")
+    from training._report import banner, step, summary, warn
+
+    banner("DPO preference alignment", f"adapter={args.sft_adapter} · beta={args.beta}")
+    step(f"Loading SFT adapter from: {args.sft_adapter}")
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.sft_adapter,
         max_seq_length=MAX_SEQ_LEN,
@@ -52,13 +55,13 @@ def main():
         random_state=42,
     )
 
-    print(f"Loading DPO dataset: {args.data}")
+    step(f"Loading DPO dataset: {args.data}")
     dataset = load_dataset("json", data_files=args.data, split="train")
-    print(f"  {len(dataset)} preference pairs")
+    step(f"{len(dataset)} preference pairs")
 
     if len(dataset) < 10:
-        print("\nWarning: fewer than 10 DPO pairs — training may be unstable.")
-        print("Add more human corrections via POST /review/<feedback_id> first.")
+        warn("Fewer than 10 DPO pairs — training may be unstable.")
+        warn("Add more human corrections via POST /review/<feedback_id> first.")
 
     dpo_config = DPOConfig(
         output_dir=args.output_dir,
@@ -88,13 +91,19 @@ def main():
         tokenizer=tokenizer,
     )
 
-    print("Starting DPO training...")
+    step("Starting DPO training...")
     trainer.train()
 
-    print(f"\nSaving DPO adapter to {args.output_dir}")
+    step(f"Saving DPO adapter to {args.output_dir}")
     model.save_pretrained(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
-    print("Done. Run merge_lora.py + quantize_awq.py to produce a vLLM-ready model.")
+    summary(
+        "DPO complete",
+        preference_pairs=len(dataset),
+        beta=args.beta,
+        adapter=args.output_dir,
+        next_step="merge_lora.py → quantize_awq.py",
+    )
 
 
 if __name__ == "__main__":
