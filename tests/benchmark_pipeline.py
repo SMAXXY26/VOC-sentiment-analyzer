@@ -48,9 +48,7 @@ class PipelineResult:
     error: str = ""
 
 
-async def analyze_one(
-    client: httpx.AsyncClient, text: str, semaphore: asyncio.Semaphore
-) -> PipelineResult:
+async def analyze_one(client: httpx.AsyncClient, text: str, semaphore: asyncio.Semaphore) -> PipelineResult:
     async with semaphore:
         t_start = time.perf_counter()
         try:
@@ -75,8 +73,11 @@ async def analyze_one(
         except Exception as exc:
             latency_ms = (time.perf_counter() - t_start) * 1000
             return PipelineResult(
-                latency_ms=latency_ms, status=0, has_confidence=False,
-                success=False, error=str(exc)[:80],
+                latency_ms=latency_ms,
+                status=0,
+                has_confidence=False,
+                success=False,
+                error=str(exc)[:80],
             )
 
 
@@ -87,17 +88,11 @@ async def run_level(concurrency: int, num_requests: int, warmup: int) -> dict:
         max_keepalive_connections=concurrency,
     )
     async with httpx.AsyncClient(limits=limits) as client:
-        warmup_tasks = [
-            analyze_one(client, SAMPLE_TEXTS[i % len(SAMPLE_TEXTS)], semaphore)
-            for i in range(warmup)
-        ]
+        warmup_tasks = [analyze_one(client, SAMPLE_TEXTS[i % len(SAMPLE_TEXTS)], semaphore) for i in range(warmup)]
         await asyncio.gather(*warmup_tasks)
 
         t_wall = time.perf_counter()
-        tasks = [
-            analyze_one(client, SAMPLE_TEXTS[i % len(SAMPLE_TEXTS)], semaphore)
-            for i in range(num_requests)
-        ]
+        tasks = [analyze_one(client, SAMPLE_TEXTS[i % len(SAMPLE_TEXTS)], semaphore) for i in range(num_requests)]
         results: list[PipelineResult] = await asyncio.gather(*tasks)
         wall_elapsed = time.perf_counter() - t_wall
 
@@ -126,14 +121,18 @@ async def run_level(concurrency: int, num_requests: int, warmup: int) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(description="Benchmark FastAPI analyzer pipeline E2E latency.")
-    parser.add_argument("--concurrency", type=int, nargs="+", default=[1, 2, 4],
-                        help="concurrency levels to sweep (default: 1 2 4)")
-    parser.add_argument("--requests", type=int, default=10,
-                        help="measured requests per concurrency level (default: 10)")
-    parser.add_argument("--warmup", type=int, default=2,
-                        help="warm-up requests discarded before measurement (default: 2)")
-    parser.add_argument("--out", default="results_pipeline.json",
-                        help="output JSON file (default: results_pipeline.json)")
+    parser.add_argument(
+        "--concurrency", type=int, nargs="+", default=[1, 2, 4], help="concurrency levels to sweep (default: 1 2 4)"
+    )
+    parser.add_argument(
+        "--requests", type=int, default=10, help="measured requests per concurrency level (default: 10)"
+    )
+    parser.add_argument(
+        "--warmup", type=int, default=2, help="warm-up requests discarded before measurement (default: 2)"
+    )
+    parser.add_argument(
+        "--out", default="results_pipeline.json", help="output JSON file (default: results_pipeline.json)"
+    )
     args = parser.parse_args()
 
     print(f"Target  : {ANALYZER_URL}/analyze")
@@ -146,8 +145,10 @@ def main():
         result = asyncio.run(run_level(c, args.requests, args.warmup))
         all_results.append(result)
         lat = result["latency_ms"]
-        print(f"    p50={lat['p50']:.0f}ms  p95={lat['p95']:.0f}ms  p99={lat['p99']:.0f}ms  "
-              f"req/s={result['req_per_sec']:.4f}  failures={result['failures']}")
+        print(
+            f"    p50={lat['p50']:.0f}ms  p95={lat['p95']:.0f}ms  p99={lat['p99']:.0f}ms  "
+            f"req/s={result['req_per_sec']:.4f}  failures={result['failures']}"
+        )
 
     console = Console()
     table = Table(title="Pipeline E2E Benchmark Results", show_lines=True)

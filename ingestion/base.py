@@ -7,5 +7,4 @@ class BaseIngester(ABC):
     """All ingesters return a flat list of RawFeedback records."""
 
     @abstractmethod
-    def ingest(self, **kwargs) -> list[RawFeedback]:
-        ...
+    def ingest(self, **kwargs) -> list[RawFeedback]: ...

@@ -64,8 +64,7 @@ def load_records(args) -> list[RawFeedback]:
 
 def main():
     parser = argparse.ArgumentParser(description="CX Pipeline: ingest → analyze")
-    parser.add_argument("--source", required=True,
-                        choices=["csv", "nps", "google_forms", "typeform"])
+    parser.add_argument("--source", required=True, choices=["csv", "nps", "google_forms", "typeform"])
     parser.add_argument("--file", help="Path to input file (CSV sources)")
     parser.add_argument("--form-id", help="Typeform form ID")
     parser.add_argument("--text-col", help="Column name for feedback text")
@@ -75,11 +74,13 @@ def main():
     parser.add_argument("--questions", nargs="+", help="Google Forms question headers")
     parser.add_argument("--rating-question", help="Google Forms rating question header")
     parser.add_argument("--out", required=True, help="Output JSON file path")
-    parser.add_argument("--no-trends", action="store_true",
-                        help="Skip trend aggregation (faster for single items)")
-    parser.add_argument("--semantic-schedule", action="store_true",
-                        help="Reorder the batch by semantic similarity to maximize vLLM "
-                             "prefix-cache reuse (needs vLLM --enable-prefix-caching)")
+    parser.add_argument("--no-trends", action="store_true", help="Skip trend aggregation (faster for single items)")
+    parser.add_argument(
+        "--semantic-schedule",
+        action="store_true",
+        help="Reorder the batch by semantic similarity to maximize vLLM "
+        "prefix-cache reuse (needs vLLM --enable-prefix-caching)",
+    )
     args = parser.parse_args()
 
     console.print(f"[bold cyan]Loading records from {args.source}...[/bold cyan]")
@@ -88,26 +89,30 @@ def main():
 
     if args.semantic_schedule and len(records) > 2:
         from analyzer.scheduler import schedule
+
         records = schedule(records, key=lambda r: r.text)
         console.print("[cyan]Reordered batch by semantic similarity (prefix-cache friendly)[/cyan]")
 
     analyses = []
     for record in track(records, description="Analyzing..."):
         result = analyze_single(record.text)
-        analyses.append({
-            "source_id": record.id,
-            "source": record.source,
-            "rating": record.rating,
-            "submitted_at": record.submitted_at.isoformat() if record.submitted_at else None,
-            "metadata": record.metadata,
-            "analysis": result.model_dump(),
-        })
+        analyses.append(
+            {
+                "source_id": record.id,
+                "source": record.source,
+                "rating": record.rating,
+                "submitted_at": record.submitted_at.isoformat() if record.submitted_at else None,
+                "metadata": record.metadata,
+                "analysis": result.model_dump(),
+            }
+        )
 
     output: dict = {"results": analyses}
 
     if not args.no_trends and len(analyses) > 1:
         console.print("[bold cyan]Aggregating trends...[/bold cyan]")
         from analyzer.schemas import FeedbackAnalysis
+
         parsed = [FeedbackAnalysis(**a["analysis"]) for a in analyses]
         output["trends"] = aggregate_trends(parsed).model_dump()
 

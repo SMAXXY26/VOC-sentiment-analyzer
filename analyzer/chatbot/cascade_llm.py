@@ -8,6 +8,7 @@ complex/issue-heavy queries go straight to the authoritative model.
 Config: set DRAFT_LLM_URL env var to the 1.5B endpoint URL.
 If unset or empty, all queries fall back to the big model (safe default).
 """
+
 from __future__ import annotations
 
 import os
@@ -21,10 +22,32 @@ DRAFT_LLM_URL: str = os.getenv("DRAFT_LLM_URL", "").rstrip("/")
 
 # Keywords that signal the query needs the full model's reasoning power
 _COMPLEX_SIGNALS = {
-    "why", "explain", "issue", "complaint", "escalate", "broken", "damaged",
-    "refund", "wrong", "missing", "urgent", "angry", "terrible", "worst",
-    "disappointed", "frustrated", "lost", "never", "impossible", "unacceptable",
-    "legal", "manager", "lawsuit", "charged", "overcharged", "fraud",
+    "why",
+    "explain",
+    "issue",
+    "complaint",
+    "escalate",
+    "broken",
+    "damaged",
+    "refund",
+    "wrong",
+    "missing",
+    "urgent",
+    "angry",
+    "terrible",
+    "worst",
+    "disappointed",
+    "frustrated",
+    "lost",
+    "never",
+    "impossible",
+    "unacceptable",
+    "legal",
+    "manager",
+    "lawsuit",
+    "charged",
+    "overcharged",
+    "fraud",
 }
 
 

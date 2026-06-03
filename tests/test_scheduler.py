@@ -1,5 +1,6 @@
 """Tests for the semantic request scheduler (analyzer/scheduler.py).
 Uses a stub embed_fn so it's deterministic and needs no model/network."""
+
 import math
 
 from analyzer.scheduler import schedule, semantic_order

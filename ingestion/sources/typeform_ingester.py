@@ -54,13 +54,15 @@ class TypeformIngester(BaseIngester):
                     except ValueError:
                         pass
 
-                records.append(RawFeedback(
-                    id=item.get("response_id", str(uuid.uuid4())),
-                    source=FeedbackSource.typeform,
-                    text="\n".join(text_parts),
-                    submitted_at=submitted_at,
-                    metadata={"form_id": form_id},
-                ))
+                records.append(
+                    RawFeedback(
+                        id=item.get("response_id", str(uuid.uuid4())),
+                        source=FeedbackSource.typeform,
+                        text="\n".join(text_parts),
+                        submitted_at=submitted_at,
+                        metadata={"form_id": form_id},
+                    )
+                )
 
             if len(items) < page_size:
                 break

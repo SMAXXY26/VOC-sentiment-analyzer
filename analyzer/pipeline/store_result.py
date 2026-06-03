@@ -10,6 +10,7 @@ def _store(ctx: dict) -> dict:
     feedback_id = ctx.get("feedback_id")
     if not feedback_id:
         import warnings
+
         warnings.warn(
             "store_result: 'feedback_id' missing from pipeline context — analysis will not be stored.",
             stacklevel=2,
@@ -35,6 +36,7 @@ def _store(ctx: dict) -> dict:
 
     try:
         from vectordb.store import store_analysis
+
         store_analysis(
             feedback_id=feedback_id,
             raw_text=raw_text,
@@ -44,6 +46,7 @@ def _store(ctx: dict) -> dict:
         # Qdrant is reachable — opportunistically drain any local fallback buffer.
         try:
             from .store_buffer import flush_store_buffer
+
             flush_store_buffer()
         except Exception:
             pass
@@ -54,12 +57,14 @@ def _store(ctx: dict) -> dict:
         enqueued = False
         try:
             from ..store_retry import publish_store_retry
+
             enqueued = publish_store_retry(feedback_id, raw_text, analysis, source)
         except Exception:
             enqueued = False
         if not enqueued:
             try:
                 from .store_buffer import buffer_failed_store
+
                 buffer_failed_store(feedback_id, raw_text, analysis, source)
             except Exception:
                 pass  # never block the pipeline

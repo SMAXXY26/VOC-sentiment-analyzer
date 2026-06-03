@@ -6,6 +6,7 @@ Rejected = the original low-confidence analysis (human said this was wrong)
 Usage:
     python training/export_dpo_data.py --out training/data/dpo.jsonl
 """
+
 import argparse
 import json
 import os
@@ -31,12 +32,11 @@ def build_prompt(raw_text: str) -> str:
 
 def fetch_analysis_by_id(client, feedback_id: str, collection: str) -> dict | None:
     from qdrant_client.models import FieldCondition, Filter, MatchValue
+
     try:
         results, _ = client.scroll(
             collection_name=collection,
-            scroll_filter=Filter(
-                must=[FieldCondition(key="feedback_id", match=MatchValue(value=feedback_id))]
-            ),
+            scroll_filter=Filter(must=[FieldCondition(key="feedback_id", match=MatchValue(value=feedback_id))]),
             limit=1,
             with_payload=True,
         )
@@ -75,9 +75,7 @@ def main():
     try:
         queue_points, _ = client.scroll(
             collection_name=REVIEW_COLLECTION,
-            scroll_filter=Filter(
-                must=[FieldCondition(key="status", match=MatchValue(value="reviewed"))]
-            ),
+            scroll_filter=Filter(must=[FieldCondition(key="status", match=MatchValue(value="reviewed"))]),
             limit=5000,
             with_payload=True,
         )
@@ -113,9 +111,9 @@ def main():
             # Rejected: reconstruct from the original pre-correction fields on the queue item
             rejected_slim = {
                 "taxonomy": {
-                    "category":    p.get("current_category", "Other"),
+                    "category": p.get("current_category", "Other"),
                     "subcategory": p.get("current_subcategory", ""),
-                    "confidence":  p.get("pipeline_confidence", 0.5),
+                    "confidence": p.get("pipeline_confidence", 0.5),
                 },
                 "sentiment": {
                     "sentiment": p.get("current_sentiment", "neutral"),
@@ -125,8 +123,8 @@ def main():
             }
 
             record = {
-                "prompt":   build_prompt(raw_text),
-                "chosen":   slim_analysis(chosen_analysis),
+                "prompt": build_prompt(raw_text),
+                "chosen": slim_analysis(chosen_analysis),
                 "rejected": json.dumps(rejected_slim, separators=(",", ":")),
             }
             f.write(json.dumps(record) + "\n")

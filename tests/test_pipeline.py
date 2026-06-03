@@ -55,12 +55,8 @@ def _mock_llm_output(model_class):
             entities=["subscription", "CompetitorX"],
             context="post-billing issue",
         ),
-        TaxonomyClassification: dict(
-            category="Billing", subcategory="Duplicate Charge", confidence=0.95
-        ),
-        SentimentEmotion: dict(
-            sentiment="negative", emotions=["frustrated", "angry"], intensity=8
-        ),
+        TaxonomyClassification: dict(category="Billing", subcategory="Duplicate Charge", confidence=0.95),
+        SentimentEmotion: dict(sentiment="negative", emotions=["frustrated", "angry"], intensity=8),
         BusinessSignals: dict(
             churn_risk=True,
             upsell_opportunity=False,
@@ -85,6 +81,7 @@ def _mock_llm_output(model_class):
 
 
 # ── Ingestion tests ───────────────────────────────────────────────────────────
+
 
 class TestIngestion:
     def test_csv_ingester(self):
@@ -117,6 +114,7 @@ class TestIngestion:
 
 # ── Normalization tests ───────────────────────────────────────────────────────
 
+
 class TestNormalization:
     def test_strips_html(self):
         ctx = normalization_stage.invoke({"raw_text": "<p>Hello <b>world</b></p>"})
@@ -136,6 +134,7 @@ class TestNormalization:
 
 
 # ── PII redaction tests ───────────────────────────────────────────────────────
+
 
 class TestPIIRedaction:
     def _run(self, text):
@@ -165,14 +164,14 @@ class TestPIIRedaction:
 
 # ── Full pipeline (mocked LLM) ────────────────────────────────────────────────
 
+
 class TestFullPipelineMocked:
     def _fake_pipeline_ctx(self, input_ctx: dict) -> dict:
         """Return a fully-populated context dict, bypassing all LLM calls."""
         from analyzer.pipeline.normalization import normalization_stage
         from analyzer.pipeline.pii_redaction import pii_redaction_stage
-        ctx = pii_redaction_stage.invoke(normalization_stage.invoke(
-            {**input_ctx, "feedback_id": "test-id-123"}
-        ))
+
+        ctx = pii_redaction_stage.invoke(normalization_stage.invoke({**input_ctx, "feedback_id": "test-id-123"}))
         ctx["enrichment"] = _mock_llm_output(SemanticEnrichment)
         ctx["taxonomy"] = _mock_llm_output(TaxonomyClassification)
         ctx["sentiment"] = _mock_llm_output(SentimentEmotion)
@@ -186,6 +185,7 @@ class TestFullPipelineMocked:
             mock_pipeline.invoke.side_effect = self._fake_pipeline_ctx
 
             from analyzer.main import analyze_single
+
             result = analyze_single(DUMMY_TEXT)
 
         assert isinstance(result, FeedbackAnalysis)
@@ -200,10 +200,12 @@ class TestFullPipelineMocked:
 
 # ── Live pipeline test (requires vLLM on localhost:8000) ─────────────────────
 
+
 @pytest.mark.live
 class TestLivePipeline:
     def test_single_feedback_live(self):
         from analyzer.main import analyze_single
+
         result = analyze_single(DUMMY_TEXT)
         assert isinstance(result, FeedbackAnalysis)
         assert result.sentiment.sentiment in ("positive", "negative", "neutral")

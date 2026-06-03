@@ -92,15 +92,11 @@ async def run_level(concurrency: int, num_prompts: int, warmup: int) -> dict:
     client = AsyncOpenAI(base_url=VLLM_BASE_URL, api_key="dummy")
     semaphore = asyncio.Semaphore(concurrency)
 
-    warmup_tasks = [
-        measure_one(client, PROMPTS[i % len(PROMPTS)], semaphore) for i in range(warmup)
-    ]
+    warmup_tasks = [measure_one(client, PROMPTS[i % len(PROMPTS)], semaphore) for i in range(warmup)]
     await asyncio.gather(*warmup_tasks)
 
     t_wall = time.perf_counter()
-    tasks = [
-        measure_one(client, PROMPTS[i % len(PROMPTS)], semaphore) for i in range(num_prompts)
-    ]
+    tasks = [measure_one(client, PROMPTS[i % len(PROMPTS)], semaphore) for i in range(num_prompts)]
     results: list[RequestResult] = await asyncio.gather(*tasks)
     wall_elapsed = time.perf_counter() - t_wall
 
@@ -129,14 +125,14 @@ async def run_level(concurrency: int, num_prompts: int, warmup: int) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(description="Benchmark raw vLLM TTFT and throughput.")
-    parser.add_argument("--concurrency", type=int, nargs="+", default=[1, 4, 8],
-                        help="concurrency levels to sweep (default: 1 4 8)")
-    parser.add_argument("--prompts", type=int, default=20,
-                        help="measured requests per concurrency level (default: 20)")
-    parser.add_argument("--warmup", type=int, default=3,
-                        help="warm-up requests discarded before measurement (default: 3)")
-    parser.add_argument("--out", default="results_vllm.json",
-                        help="output JSON file (default: results_vllm.json)")
+    parser.add_argument(
+        "--concurrency", type=int, nargs="+", default=[1, 4, 8], help="concurrency levels to sweep (default: 1 4 8)"
+    )
+    parser.add_argument("--prompts", type=int, default=20, help="measured requests per concurrency level (default: 20)")
+    parser.add_argument(
+        "--warmup", type=int, default=3, help="warm-up requests discarded before measurement (default: 3)"
+    )
+    parser.add_argument("--out", default="results_vllm.json", help="output JSON file (default: results_vllm.json)")
     args = parser.parse_args()
 
     print(f"Target : {VLLM_BASE_URL}")
@@ -149,8 +145,10 @@ def main():
         result = asyncio.run(run_level(c, args.prompts, args.warmup))
         all_results.append(result)
         ttft = result["ttft_ms"]
-        print(f"    TTFT p50={ttft['p50']:.0f}ms  p95={ttft['p95']:.0f}ms  "
-              f"tok/s={result['token_throughput_per_sec']:.0f}  failures={result['failures']}")
+        print(
+            f"    TTFT p50={ttft['p50']:.0f}ms  p95={ttft['p95']:.0f}ms  "
+            f"tok/s={result['token_throughput_per_sec']:.0f}  failures={result['failures']}"
+        )
 
     console = Console()
     table = Table(title="vLLM Benchmark Results", show_lines=True)

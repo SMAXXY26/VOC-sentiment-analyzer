@@ -50,15 +50,16 @@ class CSVIngester(BaseIngester):
                     except ValueError:
                         pass
 
-                extra = {k: v for k, v in row.items()
-                         if k not in {self.text_col, self.rating_col, self.date_col}}
+                extra = {k: v for k, v in row.items() if k not in {self.text_col, self.rating_col, self.date_col}}
 
-                records.append(RawFeedback(
-                    id=str(uuid.uuid4()),
-                    source=FeedbackSource.csv_upload,
-                    text=text,
-                    rating=rating,
-                    submitted_at=submitted_at,
-                    metadata=extra,
-                ))
+                records.append(
+                    RawFeedback(
+                        id=str(uuid.uuid4()),
+                        source=FeedbackSource.csv_upload,
+                        text=text,
+                        rating=rating,
+                        submitted_at=submitted_at,
+                        metadata=extra,
+                    )
+                )
         return records

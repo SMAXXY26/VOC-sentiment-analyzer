@@ -24,6 +24,7 @@ Windows:
 Results are stored in the `drift_snapshots` Qdrant collection so drift
 can be tracked over time. Each snapshot embeds the summary text.
 """
+
 from __future__ import annotations
 
 import math
@@ -43,6 +44,7 @@ DRIFT_COLLECTION = "drift_snapshots"
 
 
 # ── Math helpers ──────────────────────────────────────────────────────────────
+
 
 def _cosine_distance(a: np.ndarray, b: np.ndarray) -> float:
     na, nb = np.linalg.norm(a), np.linalg.norm(b)
@@ -83,12 +85,14 @@ def _category_dist(payloads: list[dict]) -> dict[str, float]:
 
 # ── Drift snapshot storage ────────────────────────────────────────────────────
 
+
 def _ensure_drift_collection(client) -> None:
     existing = {c.name for c in client.get_collections().collections}
     if DRIFT_COLLECTION not in existing:
         from qdrant_client.models import Distance, VectorParams
 
         from vectordb.embedder import VECTOR_SIZE
+
         client.create_collection(
             collection_name=DRIFT_COLLECTION,
             vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
@@ -102,6 +106,7 @@ def _store_snapshot(snapshot: dict) -> None:
         from qdrant_client.models import PointStruct
 
         from vectordb.embedder import embed
+
         client = get_client()
         _ensure_drift_collection(client)
         summary = (
@@ -111,17 +116,20 @@ def _store_snapshot(snapshot: dict) -> None:
         )
         client.upsert(
             collection_name=DRIFT_COLLECTION,
-            points=[PointStruct(
-                id=str(uuid.uuid4()),
-                vector=embed(summary),
-                payload={**snapshot, "stored_at": time.time()},
-            )],
+            points=[
+                PointStruct(
+                    id=str(uuid.uuid4()),
+                    vector=embed(summary),
+                    payload={**snapshot, "stored_at": time.time()},
+                )
+            ],
         )
     except Exception:
         pass
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
+
 
 def compute_drift(recent_days: int = 7, baseline_days: int = 30) -> dict:
     """
@@ -142,7 +150,7 @@ def compute_drift(recent_days: int = 7, baseline_days: int = 30) -> dict:
     }
     """
     now = time.time()
-    recent_since   = now - recent_days * 86400
+    recent_since = now - recent_days * 86400
     baseline_since = now - (recent_days + baseline_days) * 86400
     baseline_until = recent_since
 
@@ -151,14 +159,8 @@ def compute_drift(recent_days: int = 7, baseline_days: int = 30) -> dict:
     baseline_vecs, baseline_payloads = export_embeddings(limit=5000, since_ts=baseline_since)
 
     # Filter baseline to its window (export_embeddings only has a since_ts filter)
-    baseline_vecs = [
-        v for v, p in zip(baseline_vecs, baseline_payloads)
-        if p.get("stored_at", 0) <= baseline_until
-    ]
-    baseline_payloads = [
-        p for p in baseline_payloads
-        if p.get("stored_at", 0) <= baseline_until
-    ]
+    baseline_vecs = [v for v, p in zip(baseline_vecs, baseline_payloads) if p.get("stored_at", 0) <= baseline_until]
+    baseline_payloads = [p for p in baseline_payloads if p.get("stored_at", 0) <= baseline_until]
 
     if not recent_vecs or not baseline_vecs:
         return {
@@ -176,13 +178,13 @@ def compute_drift(recent_days: int = 7, baseline_days: int = 30) -> dict:
     centroid_alert = centroid_dist > CENTROID_THRESHOLD
 
     # 2. Sentiment shift
-    recent_neg   = _sentiment_negative_rate(recent_payloads)
+    recent_neg = _sentiment_negative_rate(recent_payloads)
     baseline_neg = _sentiment_negative_rate(baseline_payloads)
     sentiment_shift = abs(recent_neg - baseline_neg)
     sentiment_alert = sentiment_shift > SENTIMENT_THRESHOLD
 
     # 3. Category entropy
-    recent_cat_dist   = _category_dist(recent_payloads)
+    recent_cat_dist = _category_dist(recent_payloads)
     baseline_cat_dist = _category_dist(baseline_payloads)
     cat_kl = _kl_divergence(recent_cat_dist, baseline_cat_dist)
     cat_alert = cat_kl > ENTROPY_THRESHOLD

@@ -9,6 +9,7 @@ load_dotenv()
 def _deduplicate(ctx: dict) -> dict:
     try:
         from vectordb.store import find_duplicates
+
         threshold = float(os.getenv("DEDUP_THRESHOLD", "0.95"))
         matches = find_duplicates(ctx["raw_text"], threshold=threshold)
         if matches:

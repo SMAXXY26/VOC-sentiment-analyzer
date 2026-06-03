@@ -4,6 +4,7 @@ Usage:
     python training/export_sft_data.py --min-confidence 0.75 --out training/data/sft.jsonl
     python training/export_sft_data.py --min-confidence 0.80 --limit 500 --out training/data/sft.jsonl
 """
+
 import argparse
 import json
 import os
@@ -64,12 +65,13 @@ def build_assistant_turn(analysis_json: str) -> str | None:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--min-confidence", type=float, default=0.75,
-                        help="Minimum pipeline_confidence to include (default: 0.75)")
-    parser.add_argument("--limit", type=int, default=5000,
-                        help="Max Qdrant points to scan (default: 5000)")
-    parser.add_argument("--out", default="training/data/sft.jsonl",
-                        help="Output JSONL path (default: training/data/sft.jsonl)")
+    parser.add_argument(
+        "--min-confidence", type=float, default=0.75, help="Minimum pipeline_confidence to include (default: 0.75)"
+    )
+    parser.add_argument("--limit", type=int, default=5000, help="Max Qdrant points to scan (default: 5000)")
+    parser.add_argument(
+        "--out", default="training/data/sft.jsonl", help="Output JSONL path (default: training/data/sft.jsonl)"
+    )
     parser.add_argument("--qdrant-url", default=os.getenv("QDRANT_URL", "http://localhost:6333"))
     args = parser.parse_args()
 
@@ -124,8 +126,8 @@ def main():
 
             record = {
                 "conversations": [
-                    {"role": "system",    "value": SYSTEM_PROMPT},
-                    {"role": "user",      "value": raw_text},
+                    {"role": "system", "value": SYSTEM_PROMPT},
+                    {"role": "user", "value": raw_text},
                     {"role": "assistant", "value": assistant_turn},
                 ]
             }
