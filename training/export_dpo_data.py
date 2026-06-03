@@ -62,12 +62,14 @@ def main():
 
     from qdrant_client.models import FieldCondition, Filter, MatchValue
 
+    from training._report import banner, step, summary, warn
     from vectordb.client import ANALYSES_COLLECTION, get_client
 
+    banner("DPO data export", "review_queue corrections → chosen/rejected pairs")
     client = get_client()
     REVIEW_COLLECTION = "review_queue"
 
-    print(f"Connecting to Qdrant at {args.qdrant_url}")
+    step(f"Connecting to Qdrant at {args.qdrant_url}")
 
     # Scroll review_queue for reviewed items with corrections
     try:
@@ -80,7 +82,7 @@ def main():
             with_payload=True,
         )
     except Exception as e:
-        print(f"Could not read review_queue collection: {e}")
+        warn(f"Could not read review_queue collection: {e}")
         queue_points = []
 
     written = 0
@@ -130,13 +132,15 @@ def main():
             f.write(json.dumps(record) + "\n")
             written += 1
 
-    print("\nDone.")
-    print(f"  DPO pairs written : {written}")
-    print(f"  Skipped           : {skipped}")
-    print(f"  Output            : {args.out}")
+    summary(
+        "DPO export complete",
+        dpo_pairs_written=written,
+        skipped=skipped,
+        output=args.out,
+    )
     if written == 0:
-        print("\n  Note: 0 pairs means the review queue has no human corrections yet.")
-        print("  Submit corrections via POST /review/<feedback_id> to build DPO data.")
+        warn("0 pairs — the review queue has no human corrections yet.")
+        warn("Submit corrections via POST /review/<feedback_id> to build DPO data.")
 
 
 if __name__ == "__main__":
