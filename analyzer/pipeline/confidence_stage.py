@@ -25,8 +25,9 @@ Computes a single pipeline_confidence float (0.0–1.0) from three signals:
 Items with pipeline_confidence < REVIEW_THRESHOLD (default 0.65) are queued for
 active learning review.
 """
-from langchain_core.runnables import RunnableLambda
 import os
+
+from langchain_core.runnables import RunnableLambda
 
 REVIEW_THRESHOLD = float(os.getenv("REVIEW_THRESHOLD", "0.65"))
 

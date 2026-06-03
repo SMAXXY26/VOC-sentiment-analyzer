@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
-from typing import Literal, Optional
 from enum import Enum
+from typing import Literal, Optional
+
+from pydantic import BaseModel, Field
 
 
 class NormalizedFeedback(BaseModel):

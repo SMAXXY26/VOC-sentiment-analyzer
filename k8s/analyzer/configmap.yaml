@@ -15,6 +15,10 @@ data:
   DEDUP_THRESHOLD: "0.95"
   RAG_K: "3"
   PYTHONUNBUFFERED: "1"
+  # Kafka brokers for the durable store-retry lane (failed Qdrant writes are
+  # republished to feedback.store_retry and drained back once Qdrant recovers).
+  # Empty = retry lane disabled; falls back to the local file buffer.
+  KAFKA_BROKERS: "redpanda:9092"
   # Draft LLM (Qwen2.5-1.5B on server laptop 1650 Ti) — empty = always use big model
   DRAFT_LLM_URL: "http://draft-llm:8001/v1"
   # API auth — set a non-empty string to require X-API-Key header on all endpoints

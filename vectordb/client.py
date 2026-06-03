@@ -1,8 +1,9 @@
-from functools import lru_cache
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PayloadSchemaType
-from dotenv import load_dotenv
 import os
+from functools import lru_cache
+
+from dotenv import load_dotenv
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, PayloadSchemaType, VectorParams
 
 from .embedder import VECTOR_SIZE
 

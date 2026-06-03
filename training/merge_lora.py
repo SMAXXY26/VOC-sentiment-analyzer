@@ -6,6 +6,7 @@ Usage:
 """
 import argparse
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--adapter", default="training/checkpoints/dpo-adapter")

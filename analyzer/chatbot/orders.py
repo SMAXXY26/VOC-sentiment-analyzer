@@ -56,6 +56,7 @@ _DEMO_ORDERS = [
 
 def _ensure_collection(collection: str):
     from qdrant_client.models import Distance, VectorParams
+
     from vectordb.client import get_client
     from vectordb.embedder import VECTOR_SIZE
     client = get_client()
@@ -71,7 +72,8 @@ def _ensure_collection(collection: str):
 def seed_demo_orders() -> None:
     """Seed demo orders for development. Safe to call multiple times."""
     try:
-        from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchValue
+        from qdrant_client.models import FieldCondition, Filter, MatchValue, PointStruct
+
         from vectordb.embedder import embed
         client = _ensure_collection(ORDERS_COLLECTION)
         for order in _DEMO_ORDERS:
@@ -100,7 +102,7 @@ def seed_demo_orders() -> None:
 
 def get_customer_orders(customer_id: str, limit: int = 5) -> list[dict]:
     try:
-        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
         client = _ensure_collection(ORDERS_COLLECTION)
         points, _ = client.scroll(
             collection_name=ORDERS_COLLECTION,
@@ -117,7 +119,7 @@ def get_customer_orders(customer_id: str, limit: int = 5) -> list[dict]:
 
 def get_order_by_id(order_id: str) -> Optional[dict]:
     try:
-        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
         client = _ensure_collection(ORDERS_COLLECTION)
         points, _ = client.scroll(
             collection_name=ORDERS_COLLECTION,
@@ -143,6 +145,7 @@ def create_ticket(
     ticket_id = f"TKT-{str(uuid.uuid4())[:8].upper()}"
     try:
         from qdrant_client.models import PointStruct
+
         from vectordb.embedder import embed
         client = _ensure_collection(TICKETS_COLLECTION)
         payload = {

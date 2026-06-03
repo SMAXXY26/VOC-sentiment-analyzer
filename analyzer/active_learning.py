@@ -31,7 +31,7 @@ from __future__ import annotations
 import time
 import uuid
 
-from vectordb.client import get_client, ANALYSES_COLLECTION, FEW_SHOT_COLLECTION
+from vectordb.client import ANALYSES_COLLECTION, FEW_SHOT_COLLECTION, get_client
 from vectordb.embedder import embed
 
 REVIEW_COLLECTION = "review_queue"
@@ -42,7 +42,8 @@ REVIEW_COLLECTION = "review_queue"
 def _ensure_review_collection(client) -> None:
     existing = {c.name for c in client.get_collections().collections}
     if REVIEW_COLLECTION not in existing:
-        from qdrant_client.models import VectorParams, Distance, PayloadSchemaType
+        from qdrant_client.models import Distance, PayloadSchemaType, VectorParams
+
         from vectordb.embedder import VECTOR_SIZE
         client.create_collection(
             collection_name=REVIEW_COLLECTION,
@@ -107,7 +108,7 @@ def get_queue(limit: int = 50, status: str = "pending") -> list[dict]:
     (least confident first — highest value to review).
     """
     try:
-        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
         client = get_client()
         _ensure_review_collection(client)
         results, _ = client.scroll(
@@ -128,7 +129,7 @@ def get_queue(limit: int = 50, status: str = "pending") -> list[dict]:
 def queue_stats() -> dict:
     """Count items per status."""
     try:
-        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
         client = get_client()
         _ensure_review_collection(client)
         stats = {}
@@ -171,7 +172,7 @@ def submit_correction(
     Returns {"ok": True} or {"ok": False, "error": str}.
     """
     try:
-        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
         client = get_client()
 
         correction = {
@@ -209,9 +210,8 @@ def submit_correction(
                 ),
             )
 
-        # 3. Add to few_shot_examples so future analyses benefit
-        queue_items = get_queue(limit=1, status="reviewed")
-        # Re-fetch the just-reviewed item to get its summary
+        # 3. Add to few_shot_examples so future analyses benefit.
+        # Re-fetch the just-reviewed item to get its summary.
         reviewed, _ = client.scroll(
             collection_name=REVIEW_COLLECTION,
             scroll_filter=Filter(

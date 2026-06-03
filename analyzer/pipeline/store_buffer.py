@@ -10,6 +10,7 @@ The buffer is a single append-only JSONL file guarded by a process-level lock.
 It is best-effort: if even the local write fails we give up (same as before), but
 that is far rarer than a transient Qdrant outage.
 """
+
 from __future__ import annotations
 
 import json

@@ -1,4 +1,5 @@
 from langchain_core.runnables import RunnableLambda
+
 from ..schemas import FeedbackAnalysis
 
 
@@ -40,19 +41,28 @@ def _store(ctx: dict) -> dict:
             analysis=analysis,
             source=source,
         )
-        # Qdrant is reachable — opportunistically replay anything buffered earlier.
+        # Qdrant is reachable — opportunistically drain any local fallback buffer.
         try:
             from .store_buffer import flush_store_buffer
             flush_store_buffer()
         except Exception:
             pass
     except Exception:
-        # Qdrant unavailable: don't lose the analysis — buffer it for later replay.
+        # Qdrant unavailable: never lose the analysis. Prefer the durable Kafka retry
+        # lane (survives restarts, multi-replica safe); only if Kafka is also down/
+        # disabled do we fall back to the best-effort local file buffer.
+        enqueued = False
         try:
-            from .store_buffer import buffer_failed_store
-            buffer_failed_store(feedback_id, raw_text, analysis, source)
+            from ..store_retry import publish_store_retry
+            enqueued = publish_store_retry(feedback_id, raw_text, analysis, source)
         except Exception:
-            pass  # never block the pipeline
+            enqueued = False
+        if not enqueued:
+            try:
+                from .store_buffer import buffer_failed_store
+                buffer_failed_store(feedback_id, raw_text, analysis, source)
+            except Exception:
+                pass  # never block the pipeline
     return ctx
 
 

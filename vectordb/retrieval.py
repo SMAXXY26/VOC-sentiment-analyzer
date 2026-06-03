@@ -21,7 +21,6 @@ from qdrant_client.models import (
 from .client import ANALYSES_COLLECTION, get_client
 from .embedder import embed
 
-
 # ── Filtered semantic search ───────────────────────────────────────────────────
 
 def filtered_search(

@@ -6,6 +6,7 @@ import json
 import sys
 import uuid
 
+
 def main():
     path = sys.argv[1] if len(sys.argv) > 1 else "results_clothing.json"
     with open(path) as f:
@@ -27,8 +28,8 @@ def main():
         else:
             items.append(r)
 
-    from vectordb.store import store_analysis
     from analyzer.schemas import FeedbackAnalysis
+    from vectordb.store import store_analysis
 
     imported = 0
     for item in items:

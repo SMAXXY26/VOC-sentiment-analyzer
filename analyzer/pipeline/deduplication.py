@@ -1,6 +1,7 @@
-from langchain_core.runnables import RunnableLambda
-from dotenv import load_dotenv
 import os
+
+from dotenv import load_dotenv
+from langchain_core.runnables import RunnableLambda
 
 load_dotenv()
 

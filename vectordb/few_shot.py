@@ -8,7 +8,7 @@ from pathlib import Path
 
 from qdrant_client.models import PointStruct
 
-from .client import get_client, FEW_SHOT_COLLECTION
+from .client import FEW_SHOT_COLLECTION, get_client
 from .embedder import embed
 
 _SEEDS_FILE = Path(__file__).parent / "seeds" / "examples.json"
@@ -35,7 +35,7 @@ def seed_few_shot_examples(examples: list[dict] | None = None) -> int:
 
 def get_few_shot_examples(text: str, k: int = 3, category: str | None = None) -> list[dict]:
     try:
-        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
         client = get_client()
         vector = embed(text)
         query_filter = None

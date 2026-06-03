@@ -3,12 +3,17 @@ High-level vector DB operations used by the pipeline.
 All public functions gracefully degrade if Qdrant is unreachable.
 """
 import uuid
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from qdrant_client.models import Filter, FieldCondition, MatchValue, PointStruct
+from qdrant_client.models import FieldCondition, Filter, MatchValue, PointStruct
 
-from .client import get_client, ANALYSES_COLLECTION, FEW_SHOT_COLLECTION
+from .client import ANALYSES_COLLECTION, get_client
 from .embedder import embed
+
+if TYPE_CHECKING:
+    # Imported only for type checking — at runtime this would be a circular import
+    # (analyzer.schemas → ... → vectordb). The annotations below are strings.
+    from analyzer.schemas import FeedbackAnalysis
 
 
 def store_analysis(
@@ -147,7 +152,8 @@ def search(query: str, k: int = 10) -> list[dict]:
 
 
 if __name__ == "__main__":
-    import sys, json
+    import json
+    import sys
     query = " ".join(sys.argv[1:]) or "billing issue"
     results = search(query)
     print(json.dumps(results, indent=2))

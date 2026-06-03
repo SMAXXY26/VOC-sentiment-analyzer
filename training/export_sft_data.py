@@ -75,7 +75,7 @@ def main():
 
     os.environ["QDRANT_URL"] = args.qdrant_url
 
-    from vectordb.client import get_client, ANALYSES_COLLECTION
+    from vectordb.client import ANALYSES_COLLECTION, get_client
     client = get_client()
 
     print(f"Connecting to Qdrant at {args.qdrant_url}")
@@ -129,7 +129,7 @@ def main():
             f.write(json.dumps(record) + "\n")
             written += 1
 
-    print(f"\nDone.")
+    print("\nDone.")
     print(f"  Written            : {written}")
     print(f"  Skipped (low conf) : {skipped_low_confidence}")
     print(f"  Skipped (no text)  : {skipped_no_text}")

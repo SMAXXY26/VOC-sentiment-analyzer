@@ -10,22 +10,30 @@ Run live (needs vLLM):
     python -m pytest tests/test_pipeline.py -v -m live
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from analyzer.schemas import (
-    NormalizedFeedback, RedactedFeedback, SemanticEnrichment,
-    TaxonomyClassification, SentimentEmotion, BusinessSignals,
-    RiskEscalation, RiskLevel, ExecutiveIntelligence, FeedbackAnalysis,
-)
+import pytest
+
 from analyzer.pipeline.normalization import normalization_stage
 from analyzer.pipeline.pii_redaction import pii_redaction_stage
-from ingestion import CSVIngester, NPSIngester, GoogleFormsIngester
-
+from analyzer.schemas import (
+    BusinessSignals,
+    ExecutiveIntelligence,
+    FeedbackAnalysis,
+    NormalizedFeedback,
+    RedactedFeedback,
+    RiskEscalation,
+    RiskLevel,
+    SemanticEnrichment,
+    SentimentEmotion,
+    TaxonomyClassification,
+)
+from ingestion import CSVIngester, GoogleFormsIngester, NPSIngester
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

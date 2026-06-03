@@ -33,8 +33,8 @@ from typing import Optional
 
 import numpy as np
 
-from vectordb.retrieval import export_embeddings
 from vectordb.client import get_client
+from vectordb.retrieval import export_embeddings
 
 CENTROID_THRESHOLD = float(0.10)
 SENTIMENT_THRESHOLD = float(0.15)
@@ -86,7 +86,8 @@ def _category_dist(payloads: list[dict]) -> dict[str, float]:
 def _ensure_drift_collection(client) -> None:
     existing = {c.name for c in client.get_collections().collections}
     if DRIFT_COLLECTION not in existing:
-        from qdrant_client.models import VectorParams, Distance
+        from qdrant_client.models import Distance, VectorParams
+
         from vectordb.embedder import VECTOR_SIZE
         client.create_collection(
             collection_name=DRIFT_COLLECTION,
@@ -97,7 +98,9 @@ def _ensure_drift_collection(client) -> None:
 def _store_snapshot(snapshot: dict) -> None:
     try:
         import uuid
+
         from qdrant_client.models import PointStruct
+
         from vectordb.embedder import embed
         client = get_client()
         _ensure_drift_collection(client)

@@ -20,13 +20,14 @@ Usage examples:
 import argparse
 import json
 import os
+
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.progress import track
 
-from ingestion import CSVIngester, NPSIngester, GoogleFormsIngester, TypeformIngester, RawFeedback
 from analyzer.main import analyze_single
 from analyzer.pipeline.trend_aggregation import aggregate_trends
+from ingestion import CSVIngester, GoogleFormsIngester, NPSIngester, RawFeedback, TypeformIngester
 
 load_dotenv()
 console = Console()

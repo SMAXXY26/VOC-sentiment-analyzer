@@ -1,5 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableLambda
+
 from ..llm import get_llm
 from ..schemas import SemanticEnrichment
 
@@ -23,9 +24,10 @@ _prompt = ChatPromptTemplate.from_messages([
 
 def _build_rag_context(ctx: dict) -> str:
     try:
-        from vectordb.store import get_rag_context
-        from vectordb.few_shot import get_few_shot_examples
         import os
+
+        from vectordb.few_shot import get_few_shot_examples
+        from vectordb.store import get_rag_context
         k = int(os.getenv("RAG_K", "3"))
         past = get_rag_context(ctx["redacted"].text, k=k)
         few = get_few_shot_examples(ctx["redacted"].text, k=2)

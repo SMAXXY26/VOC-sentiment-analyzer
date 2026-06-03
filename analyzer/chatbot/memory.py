@@ -9,6 +9,7 @@ fold their content into a one-line `summary` string that is prepended as a
 SystemMessage. This keeps the agent aware of early context without spending tokens.
 """
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -42,8 +43,9 @@ class ConversationMemory:
         """Drop oldest pairs until we're under the token budget."""
         while self._token_count() > MAX_HISTORY_TOKENS and len(self.messages) >= 2:
             oldest = self.messages.pop(0)
-            # Try to pop the matching response
-            partner = self.messages.pop(0) if self.messages else None
+            # Drop the matching response too (we summarise the pair into one line).
+            if self.messages:
+                self.messages.pop(0)
             snippet = oldest.content[:50].replace("\n", " ")
             self.summary = f"[Earlier: {snippet}…]"
 
@@ -57,7 +59,7 @@ class ConversationMemory:
 
     def to_langchain_messages(self):
         """Convert to LangChain message objects for the agent."""
-        from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
         out = []
         if self.summary:
             out.append(SystemMessage(content=self.summary))

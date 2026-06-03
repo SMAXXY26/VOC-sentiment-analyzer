@@ -25,7 +25,7 @@ from langgraph.prebuilt import ToolNode
 
 from .cascade_llm import get_chat_llm
 from .memory import ConversationMemory
-from .tools import TOOLS, _CURRENT_CUSTOMER
+from .tools import _CURRENT_CUSTOMER, TOOLS
 
 _SYSTEM = (
     "You are a helpful, empathetic customer support assistant. "
@@ -187,6 +187,7 @@ def _ensure_chat_collection(client) -> None:
     existing = {c.name for c in client.get_collections().collections}
     if _CHAT_COLLECTION not in existing:
         from qdrant_client.models import Distance, VectorParams
+
         from vectordb.embedder import VECTOR_SIZE
         client.create_collection(
             collection_name=_CHAT_COLLECTION,
@@ -205,6 +206,7 @@ def end_conversation(session_id: str) -> str:
 
     try:
         from qdrant_client.models import PointStruct
+
         from vectordb.client import get_client
         from vectordb.embedder import embed
         client = get_client()

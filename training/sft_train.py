@@ -28,9 +28,9 @@ def main():
     parser.add_argument("--lora-alpha", type=int, default=32)
     args = parser.parse_args()
 
-    from unsloth import FastLanguageModel
-    from trl import SFTTrainer, SFTConfig
     from datasets import load_dataset
+    from trl import SFTConfig, SFTTrainer
+    from unsloth import FastLanguageModel
 
     print(f"Loading base model: {args.model}")
     model, tokenizer = FastLanguageModel.from_pretrained(

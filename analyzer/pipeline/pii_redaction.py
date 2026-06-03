@@ -1,6 +1,8 @@
 import re
 from functools import lru_cache
+
 from langchain_core.runnables import RunnableLambda
+
 from ..schemas import RedactedFeedback
 
 _PATTERNS: list[tuple[str, str]] = [

@@ -1,3 +1,40 @@
+# Prometheus with kubernetes pod service-discovery.
+#
+# The old config scraped Service ClusterIPs (producer:9001, analyzer:8080, ...).
+# That is wrong for >1 replica: a Service load-balances each scrape to a *random*
+# backing pod, so latency/cache-hit metrics become noise and counters look like they
+# jump around. Pod SD scrapes every pod directly (and each pod declares its own
+# metrics port via annotations — handy here since the four components expose metrics
+# on four different ports).
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: cx-pipeline
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-cx
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "endpoints", "services", "nodes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-cx
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus-cx
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: cx-pipeline
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -13,6 +50,7 @@ spec:
       labels:
         app: prometheus
     spec:
+      serviceAccountName: prometheus
       containers:
         - name: prometheus
           image: prom/prometheus:v2.51.0
@@ -45,16 +83,30 @@ data:
       scrape_interval: 10s
       evaluation_interval: 10s
     scrape_configs:
-      - job_name: cx_producer
-        static_configs:
-          - targets: ["producer:9001"]
-      - job_name: cx_consumer
-        static_configs:
-          - targets: ["consumer:9002"]
-      - job_name: cx_analyzer
-        metrics_path: /metrics
-        static_configs:
-          - targets: ["analyzer:8080"]
+      # Scrape every pod in cx-pipeline that opts in with prometheus.io/scrape: "true".
+      # prometheus.io/port selects the metrics port; prometheus.io/path the path.
+      - job_name: cx_pods
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ["cx-pipeline"]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: app
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
 ---
 apiVersion: v1
 kind: Service

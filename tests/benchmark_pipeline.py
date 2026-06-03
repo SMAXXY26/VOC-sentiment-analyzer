@@ -19,10 +19,9 @@ import time
 from dataclasses import dataclass
 
 import httpx
+from benchmark_utils import compute_stats
 from rich.console import Console
 from rich.table import Table
-
-from benchmark_utils import compute_stats
 
 ANALYZER_URL = os.getenv("ANALYZER_URL", "http://localhost:8080")
 

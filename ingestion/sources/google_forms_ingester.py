@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
+
 from ..base import BaseIngester
-from ..schema import RawFeedback, FeedbackSource
+from ..schema import FeedbackSource, RawFeedback
 
 
 class GoogleFormsIngester(BaseIngester):

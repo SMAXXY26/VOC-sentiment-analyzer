@@ -1,9 +1,11 @@
+import argparse
 import json
 import sys
-import argparse
 import uuid
+
 from rich.console import Console
 from rich.json import JSON
+
 from .pipeline import pipeline
 from .pipeline.trend_aggregation import aggregate_trends
 from .schemas import FeedbackAnalysis
@@ -15,6 +17,7 @@ def analyze_single(
     raw_text: str, feedback_id: str | None = None, model: str | None = None
 ) -> FeedbackAnalysis:
     import time
+
     from .metrics import (
         DEDUP_CACHE_HITS,
         DEDUP_CACHE_MISSES,
@@ -28,8 +31,9 @@ def analyze_single(
     # regardless, and FeedbackAnalysis(**hits[0]["analysis"]) always raised KeyError
     # (silently caught) because the stored payload has no "analysis" key.
     try:
-        from vectordb.store import find_duplicates, get_analysis_by_id
         import os
+
+        from vectordb.store import find_duplicates, get_analysis_by_id
         threshold = float(os.getenv("DEDUP_THRESHOLD", "0.95"))
         matches = find_duplicates(raw_text, threshold=threshold)
         if matches:
@@ -49,7 +53,7 @@ def analyze_single(
     fid = feedback_id or str(uuid.uuid4())
 
     # Apply the producer's model routing hint for the whole pipeline run, then reset.
-    from .llm import set_target_model, reset_target_model
+    from .llm import reset_target_model, set_target_model
     token = set_target_model(model)
     try:
         ctx = pipeline.invoke({"raw_text": raw_text, "feedback_id": fid})

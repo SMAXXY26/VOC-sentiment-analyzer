@@ -8,6 +8,7 @@ This module defines the analyzer-side metric objects; `api.py` mounts /metrics a
 Histogram buckets are tuned for LLM-pipeline latencies (seconds, not milliseconds):
 a single /analyze runs ~6-8 LLM calls so end-to-end p95 is multiple seconds.
 """
+
 from __future__ import annotations
 
 import time

@@ -153,7 +153,8 @@ _REPORTS_COLLECTION = "review_reports"
 def _ensure_reports_collection(client) -> None:
     existing = {c.name for c in client.get_collections().collections}
     if _REPORTS_COLLECTION not in existing:
-        from qdrant_client.models import VectorParams, Distance
+        from qdrant_client.models import Distance, VectorParams
+
         from vectordb.embedder import VECTOR_SIZE
         client.create_collection(
             collection_name=_REPORTS_COLLECTION,
@@ -164,6 +165,7 @@ def _ensure_reports_collection(client) -> None:
 def _store_report(report: ReviewReport) -> None:
     try:
         from qdrant_client.models import PointStruct
+
         from vectordb.client import get_client
         from vectordb.embedder import embed
         client = get_client()
@@ -202,7 +204,8 @@ def run_review() -> ReviewReport:
     # Parse JSON from agent output
     report = ReviewReport()
     try:
-        import json, re
+        import json
+        import re
         json_match = re.search(r"\{.*\}", raw, re.DOTALL)
         if json_match:
             parsed = json.loads(json_match.group())

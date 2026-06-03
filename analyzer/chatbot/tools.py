@@ -9,6 +9,7 @@ Tool outputs are kept ≤280 chars to stay within the 1024-token vLLM budget.
 from __future__ import annotations
 
 from contextvars import ContextVar
+
 from langchain_core.tools import tool
 
 _CURRENT_CUSTOMER: ContextVar[dict] = ContextVar("current_customer", default={})

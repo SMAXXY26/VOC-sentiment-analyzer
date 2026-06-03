@@ -12,6 +12,10 @@ spec:
     metadata:
       labels:
         app: producer
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9001"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
         - name: producer

@@ -1,6 +1,7 @@
 from collections import Counter
+
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnableLambda
+
 from ..llm import get_llm
 from ..schemas import FeedbackAnalysis, TrendAggregation
 

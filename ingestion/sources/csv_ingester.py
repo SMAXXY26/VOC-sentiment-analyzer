@@ -2,8 +2,9 @@ import csv
 import uuid
 from datetime import datetime
 from pathlib import Path
+
 from ..base import BaseIngester
-from ..schema import RawFeedback, FeedbackSource
+from ..schema import FeedbackSource, RawFeedback
 
 
 class CSVIngester(BaseIngester):

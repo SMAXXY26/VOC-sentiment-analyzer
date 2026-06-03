@@ -18,11 +18,10 @@ import os
 import time
 from dataclasses import dataclass, field
 
+from benchmark_utils import LatencyStats, compute_stats
 from openai import AsyncOpenAI
 from rich.console import Console
 from rich.table import Table
-
-from benchmark_utils import LatencyStats, compute_stats
 
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct-AWQ")
 VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://192.168.1.11:8000/v1")

@@ -1,10 +1,13 @@
 import asyncio
 import os
 from collections import Counter
+from contextlib import asynccontextmanager
 from typing import Optional
+
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
 from .main import analyze_single
 from .schemas import FeedbackAnalysis
 
@@ -20,7 +23,24 @@ async def _require_api_key(request: Request, x_api_key: str = Header(default="")
         raise HTTPException(status_code=403, detail="Invalid API key")
 
 
-app = FastAPI(title="CX Semantic Analyzer API", dependencies=[Depends(_require_api_key)])
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    # Drain the Kafka store-retry topic in the background so analyses that failed to
+    # reach Qdrant (while it was down) get persisted once it recovers. No-op unless
+    # KAFKA_BROKERS is set and kafka-python is installed.
+    try:
+        from .store_retry import start_retry_consumer
+        start_retry_consumer()
+    except Exception:
+        pass
+    yield
+
+
+app = FastAPI(
+    title="CX Semantic Analyzer API",
+    dependencies=[Depends(_require_api_key)],
+    lifespan=_lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -55,7 +75,9 @@ async def ready():
     """Readiness probe — checks Qdrant and vLLM are reachable.
     Returns 503 if any dependency is down so k8s stops routing traffic.
     """
-    import os, httpx
+    import os
+
+    import httpx
     checks: dict = {}
     healthy = True
 
@@ -99,8 +121,8 @@ async def analyze(req: AnalyzeRequest):
 @app.get("/analyses")
 def list_analyses(limit: int = 50, offset: int = 0, q: Optional[str] = None):
     try:
+        from vectordb.client import ANALYSES_COLLECTION, get_client
         from vectordb.store import search
-        from vectordb.client import get_client, ANALYSES_COLLECTION
         if q and q.strip():
             results = search(q.strip(), k=limit)
             return {"items": results, "total": len(results)}
@@ -119,8 +141,8 @@ def list_analyses(limit: int = 50, offset: int = 0, q: Optional[str] = None):
 @app.get("/analyses/summary")
 def analyses_summary():
     try:
+        from vectordb.client import ANALYSES_COLLECTION, get_client
         from vectordb.store import get_feature_history
-        from vectordb.client import get_client, ANALYSES_COLLECTION
         client = get_client()
         all_points = []
         offset = None
@@ -178,7 +200,8 @@ class ChatResponse(BaseModel):
 @app.post("/chat", response_model=ChatResponse)
 async def chat_start(req: ChatStartRequest):
     """SOC: start a new support session. Authenticates against EDBMS if password is provided."""
-    from .chatbot.agent import start_conversation, chat as agent_chat, get_quick_replies
+    from .chatbot.agent import chat as agent_chat
+    from .chatbot.agent import get_quick_replies, start_conversation
 
     customer: dict | str = req.customer_id
     if req.password:
@@ -210,7 +233,8 @@ async def chat_continue(session_id: str, req: ChatRequest):
     """Continue an existing support session."""
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="message is required")
-    from .chatbot.agent import chat as agent_chat, get_quick_replies
+    from .chatbot.agent import chat as agent_chat
+    from .chatbot.agent import get_quick_replies
     reply = await asyncio.to_thread(agent_chat, session_id, req.message.strip())
     quick_replies = await asyncio.to_thread(get_quick_replies, session_id)
     return ChatResponse(session_id=session_id, reply=reply, quick_replies=quick_replies)
@@ -273,8 +297,8 @@ async def cluster_topics(n_clusters: Optional[int] = None):
 async def get_clusters():
     """Return cluster labels from the most recent clustering run (reads from Qdrant payloads)."""
     try:
-        from vectordb.client import get_client, ANALYSES_COLLECTION
-        from collections import Counter
+
+        from vectordb.client import ANALYSES_COLLECTION, get_client
         client = get_client()
         results, _ = client.scroll(
             collection_name=ANALYSES_COLLECTION,
@@ -377,7 +401,7 @@ async def get_review_reports(limit: int = 20):
 @app.get("/inference/endpoints")
 async def inference_endpoints():
     """Health-check all configured vLLM inference endpoints."""
-    from analyzer.llm import get_healthy_endpoints, endpoint_count
+    from analyzer.llm import endpoint_count, get_healthy_endpoints
     return {
         "endpoint_count": endpoint_count(),
         "endpoints": await asyncio.to_thread(get_healthy_endpoints),

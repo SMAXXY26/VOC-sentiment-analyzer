@@ -30,7 +30,7 @@ def build_prompt(raw_text: str) -> str:
 
 
 def fetch_analysis_by_id(client, feedback_id: str, collection: str) -> dict | None:
-    from qdrant_client.models import Filter, FieldCondition, MatchValue
+    from qdrant_client.models import FieldCondition, Filter, MatchValue
     try:
         results, _ = client.scroll(
             collection_name=collection,
@@ -60,8 +60,9 @@ def main():
 
     os.environ["QDRANT_URL"] = args.qdrant_url
 
-    from vectordb.client import get_client, ANALYSES_COLLECTION
-    from qdrant_client.models import Filter, FieldCondition, MatchValue
+    from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+    from vectordb.client import ANALYSES_COLLECTION, get_client
 
     client = get_client()
     REVIEW_COLLECTION = "review_queue"
@@ -129,7 +130,7 @@ def main():
             f.write(json.dumps(record) + "\n")
             written += 1
 
-    print(f"\nDone.")
+    print("\nDone.")
     print(f"  DPO pairs written : {written}")
     print(f"  Skipped           : {skipped}")
     print(f"  Output            : {args.out}")

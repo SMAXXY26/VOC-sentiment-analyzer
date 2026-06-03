@@ -27,9 +27,9 @@ def main():
                         help="DPO temperature — lower = stronger preference signal")
     args = parser.parse_args()
 
-    from unsloth import FastLanguageModel
-    from trl import DPOTrainer, DPOConfig
     from datasets import load_dataset
+    from trl import DPOConfig, DPOTrainer
+    from unsloth import FastLanguageModel
 
     print(f"Loading SFT adapter from: {args.sft_adapter}")
     model, tokenizer = FastLanguageModel.from_pretrained(

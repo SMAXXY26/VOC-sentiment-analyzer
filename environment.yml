@@ -26,3 +26,4 @@ dependencies:
       - rich
       - langdetect
       - prometheus-client
+      - kafka-python

@@ -25,8 +25,8 @@ import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 
+from vectordb.client import ANALYSES_COLLECTION, get_client
 from vectordb.retrieval import export_embeddings
-from vectordb.client import get_client, ANALYSES_COLLECTION
 
 K_MIN = int(os.getenv("CLUSTER_K_MIN", "3"))
 K_MAX = int(os.getenv("CLUSTER_K_MAX", "12"))
@@ -73,8 +73,7 @@ def _write_cluster_labels(
 ) -> None:
     """Patch cluster_id and cluster_label into each point's payload."""
     try:
-        from qdrant_client.models import Filter, FieldCondition, MatchValue, PayloadField
-        from qdrant_client.models import SetPayload
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
         client = get_client()
         for payload, cluster_id in zip(payloads, labels):
             fid = payload.get("feedback_id")
