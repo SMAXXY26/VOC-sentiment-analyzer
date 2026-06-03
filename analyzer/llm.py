@@ -56,6 +56,56 @@ _DRAFT_URL: str = os.getenv("DRAFT_LLM_URL", "").rstrip("/")
 _DRAFT_MODEL: str = os.getenv("DRAFT_MODEL_NAME", "Qwen/Qwen2.5-1.5B-Instruct-AWQ")
 
 
+# ── Token / call accounting ──────────────────────────────────────────────────
+# A callback attached to every ChatOpenAI instance records call count and token
+# usage into Prometheus, labelled by the active cascade tier. This is how the
+# "inference economics" and "model-cascade payoff" metrics get their data — without
+# touching any of the pipeline stage code.
+
+from langchain_core.callbacks import BaseCallbackHandler  # noqa: E402
+
+
+class _UsageCallback(BaseCallbackHandler):
+    def on_llm_end(self, response, **kwargs) -> None:  # noqa: ANN001
+        from .metrics import (
+            LLM_CALLS_TOTAL,
+            LLM_COMPLETION_TOKENS_TOTAL,
+            LLM_PROMPT_TOKENS_TOTAL,
+        )
+
+        model = _target_model.get() or "big"
+        LLM_CALLS_TOTAL.labels(model=model).inc()
+
+        prompt_tok, completion_tok = self._extract_tokens(response)
+        if prompt_tok:
+            LLM_PROMPT_TOKENS_TOTAL.labels(model=model).inc(prompt_tok)
+        if completion_tok:
+            LLM_COMPLETION_TOKENS_TOTAL.labels(model=model).inc(completion_tok)
+
+    @staticmethod
+    def _extract_tokens(response) -> tuple[int, int]:
+        # Preferred: OpenAI-style token_usage in llm_output (vLLM returns this).
+        try:
+            usage = (response.llm_output or {}).get("token_usage") or {}
+            if usage:
+                return int(usage.get("prompt_tokens", 0)), int(usage.get("completion_tokens", 0))
+        except Exception:
+            pass
+        # Fallback: usage_metadata on the generated messages.
+        try:
+            for gens in response.generations:
+                for gen in gens:
+                    um = getattr(getattr(gen, "message", None), "usage_metadata", None)
+                    if um:
+                        return int(um.get("input_tokens", 0)), int(um.get("output_tokens", 0))
+        except Exception:
+            pass
+        return 0, 0
+
+
+_usage_callback = _UsageCallback()
+
+
 # ── Endpoint pool ──────────────────────────────────────────────────────────────
 
 def _parse_endpoints() -> list[str]:
@@ -86,6 +136,7 @@ def _llm_for_endpoint(endpoint: str, temperature: float) -> ChatOpenAI:
         api_key="dummy",
         temperature=temperature,
         max_retries=3,
+        callbacks=[_usage_callback],
     )
 
 
@@ -98,6 +149,7 @@ def _draft_llm(temperature: float) -> ChatOpenAI:
         api_key="dummy",
         temperature=temperature,
         max_retries=2,
+        callbacks=[_usage_callback],
     )
 
 
