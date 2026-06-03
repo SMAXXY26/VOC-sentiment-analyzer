@@ -15,6 +15,10 @@ path = "src/bin/consumer.rs"
 name = "router"
 path = "src/bin/router.rs"
 
+[[bin]]
+name = "dlt_replay"
+path = "src/bin/dlt_replay.rs"
+
 [dev-dependencies]
 wiremock = "0.6"
 
