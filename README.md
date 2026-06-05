@@ -2,13 +2,13 @@
 
 # CX Semantic Analyzer
 
-**Production-grade Customer Experience intelligence — self-hosted LLM inference on consumer GPUs**
+**Customer Experience intelligence — a self-hosted 7B LLM pipeline on consumer GPUs (two-laptop home lab)**
 
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-stable-B7410E?logo=rust&logoColor=white)
 ![vLLM](https://img.shields.io/badge/vLLM-AWQ_Marlin-6366f1)
 ![LangChain](https://img.shields.io/badge/LangChain-LCEL-1C3C3C?logo=langchain&logoColor=white)
-![LangGraph](https://img.shields.io/badge/LangGraph-0.4-00A67E)
+![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-00A67E)
 ![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-DC382D)
 ![Kafka](https://img.shields.io/badge/Redpanda-Kafka--compatible-E04E39)
 ![k3s](https://img.shields.io/badge/k3s-Kubernetes-FFC61C?logo=k3s&logoColor=white)
@@ -18,15 +18,15 @@
 
 ---
 
-A 10-stage LangChain LCEL pipeline, Qdrant vector DB, Rust/Kafka ingestion with a load-aware inference router, an agentic support chatbot with model cascade routing, a closed-loop fine-tuning pipeline (SFT → DPO → AWQ), and a Next.js analytics dashboard. Deployed on a two-machine home lab over LAN.
+A 12-stage LangChain LCEL pipeline (7 LLM stages + rule-based dedup/normalize/PII/confidence/store), Qdrant vector DB, Rust/Kafka ingestion, an agentic support chatbot with model-cascade routing, a closed-loop fine-tuning pipeline (SFT → DPO → AWQ), and a Next.js analytics dashboard. Runs on a two-laptop home lab over LAN.
 
-> **Measured performance:** 82 tok/s · 63 ms TTFT (p50) at concurrency 2 — on a laptop RTX 4070 8GB with AWQ + Marlin kernel. Beats desktop RTX 4070 llama.cpp numbers (71 tok/s) from a laptop GPU with 8GB vs 12GB VRAM.
+> **Measured:** 82 tok/s · 63 ms TTFT (p50) at concurrency 2 on a laptop RTX 4070 8GB (AWQ + Marlin). Full 7-LLM-stage pipeline ≈ **14 s p50 / 16 s p95** over a 676-item real dataset. Methodology and comparison to published numbers (A100 Qwen, desktop llama.cpp) in [`tests/BENCHMARK_RESULTS.md`](tests/BENCHMARK_RESULTS.md) — these are single-setup home-lab measurements, not a controlled cross-hardware study.
 
 ---
 
 ## What It Does
 
-Paste any customer feedback → get back structured intelligence in under 30 seconds end-to-end:
+Paste any customer feedback → get back structured intelligence in ≈ 14 s (p50, full pipeline):
 
 | Output | Detail |
 |---|---|
@@ -35,6 +35,7 @@ Paste any customer feedback → get back structured intelligence in under 30 sec
 | Business signals | Churn risk · upsell opportunity · feature requests · bug reports · competitor mentions |
 | Risk escalation | Escalate flag · risk level (low/medium/high/critical) · suggested action |
 | Executive intelligence | 2-sentence summary · action items · health score 1–10 |
+| Experience indices | Customer Satisfaction Index (8 dims) + Customer Experience Index (4 dims), each scored 1–6 → % |
 | Confidence score | Weighted pipeline confidence (taxonomy × sentiment consistency × novelty) |
 | Deduplication | Cosine similarity ≥ 0.95 → cached result returned, zero LLM calls |
 
@@ -48,7 +49,7 @@ flowchart TD
     GW -->|"feedback.raw<br/>(tagged big/small hint)"| RP["Redpanda<br/>(Kafka-compatible, no ZooKeeper)"]
     RP --> CONS["Rust Consumer"]
     CONS -->|"text + feedback_id + model"| API["FastAPI Analyzer<br/>port 8080"]
-    API --> PIPE["10-Stage LangChain LCEL Pipeline"]
+    API --> PIPE["12-Stage LangChain LCEL Pipeline"]
     PIPE -->|"dedup · RAG · active learning"| QD[("Qdrant Vector DB")]
     PIPE -->|"OpenAI-compatible"| ROUTER["Rust Inference Router<br/>load-aware (queue depth)"]
     ROUTER --> VLLM["vLLM backend(s)<br/>Qwen2.5-7B-AWQ · RTX 4070 8GB"]
@@ -64,9 +65,11 @@ flowchart TD
     class VLLM,PIPE,ROUTER infer;
 ```
 
-Inference goes through the **Rust router**, which load-balances across vLLM backends by
-live queue depth (`vllm:num_requests_running` + `waiting`) — not client-side round-robin.
-The analyzer points `VLLM_BASE_URL` at the router and never load-balances itself.
+The **Rust router** (`router.rs`) is **optional** and built for the multi-backend case: it
+load-balances across vLLM backends by live queue depth (`vllm:num_requests_running` +
+`waiting`) instead of client-side round-robin. With a single backend it adds no value, so
+the **default deployment points the analyzer's `VLLM_BASE_URL` straight at vLLM**; set it to
+the router only when running more than one backend.
 
 ### Pipeline Stages
 
@@ -82,7 +85,8 @@ flowchart LR
     G --> H["business_signals"]
     H --> I["risk_escalation"]
     I --> J["executive_intel"]
-    J --> K["confidence_score"]
+    J --> X["experience_scoring<br/>(CSI + CX index)"]
+    X --> K["confidence_score"]
     K -->|"< 0.65"| RQ["review queue"]
     K --> L["store_result"]
 ```
@@ -180,13 +184,14 @@ Weighted score: taxonomy confidence (0.4) × sentiment consistency (0.3) × nove
 ### Agentic Review Workflow (`analyzer/review_agent.py`)
 Separate LangGraph agent that synthesises queue status, drift alerts, and escalation counts into a `ReviewReport` with action items and risk level.
 
-### Distributed Inference (`kafka_queue/src/bin/router.rs`)
-A load-aware Rust router is the single load balancer in front of the vLLM backends. It
-scrapes each backend's `vllm:num_requests_running` + `num_requests_waiting`, tracks an
-EWMA of queue depth plus in-flight requests it has dispatched, and routes each call to
-the least-loaded healthy backend (round-robin only as a cold-start fallback). It
-reverse-proxies the OpenAI-compatible request, streaming responses through. The analyzer
-points `VLLM_BASE_URL` at it and does **not** load-balance client-side.
+### Load-Aware Inference Router (`kafka_queue/src/bin/router.rs`) — *optional*
+A Rust router built for the multi-backend case (it is **not** in the default single-GPU
+deployment). When enabled, it scrapes each backend's `vllm:num_requests_running` +
+`num_requests_waiting`, tracks an EWMA of queue depth plus in-flight requests it has
+dispatched, and routes each call to the least-loaded healthy backend (round-robin only as a
+cold-start fallback), reverse-proxying the OpenAI-compatible request. To use it: build the
+`cx-router` image, `kubectl apply -f k8s/router/`, and set `VLLM_BASE_URL` to the router.
+With one backend, leave it out — there's nothing to balance.
 
 ---
 
@@ -197,7 +202,7 @@ points `VLLM_BASE_URL` at it and does **not** load-balance client-side.
 | LLM inference | vLLM · Qwen2.5-7B-Instruct-AWQ · AWQ + Marlin kernel |
 | Draft model | Qwen2.5-1.5B-Instruct · port 8001 · server laptop 1650 Ti |
 | Pipeline | Python · LangChain LCEL · Pydantic structured outputs |
-| Agent framework | LangGraph 0.4 · ReAct · ToolNode |
+| Agent framework | LangGraph ≥ 0.2 · ReAct · ToolNode |
 | Vector DB | Qdrant · `all-MiniLM-L6-v2` (384-dim) |
 | Customer EDBMS | SQLite · keyword-aware purchase history queries |
 | Web search | DuckDuckGo (langchain-community, no API key) |
@@ -339,7 +344,7 @@ bash training/merge_and_quantize.sh
 
 ```
 ├── analyzer/                       # FastAPI app + LangChain pipeline
-│   ├── api.py                      # FastAPI endpoints (21 routes + optional API-key auth)
+│   ├── api.py                      # FastAPI endpoints (22 routes + optional API-key auth)
 │   ├── main.py                     # analyze_single / analyze_batch entry points
 │   ├── llm.py                      # vLLM client — single endpoint → router (no client-side LB)
 │   ├── routing.py                  # Model-tier routing: 1.5B model-based → keyword fallback
@@ -347,7 +352,7 @@ bash training/merge_and_quantize.sh
 │   ├── metrics.py                  # Per-stage histograms, token/call accounting, research metrics
 │   ├── store_retry.py              # Kafka-backed durable retry lane for failed Qdrant writes
 │   ├── schemas.py                  # Pydantic structured output models
-│   ├── pipeline/                   # 11 LCEL stages (each wrapped with timed_stage())
+│   ├── pipeline/                   # 12 LCEL stages (each wrapped with timed_stage())
 │   │   ├── normalization.py        # Unicode / whitespace cleanup
 │   │   ├── pii_redaction.py        # spaCy NER-based PII masking
 │   │   ├── semantic_enrichment.py  # RAG context injection from Qdrant
@@ -356,7 +361,7 @@ bash training/merge_and_quantize.sh
 │   │   ├── business_signals.py     # Churn risk, upsell, feature reqs, bugs, competitors
 │   │   ├── risk_escalation.py      # Escalation flag + risk level + suggested action
 │   │   ├── executive_intelligence.py # 2-sentence summary + action items + health score
-│   │   ├── experience_scoring.py   # CX experience score
+│   │   ├── experience_scoring.py   # CSI (8 dims) + CX index (4 dims), 1–6 → %
 │   │   ├── confidence_stage.py     # Weighted confidence → review queue trigger
 │   │   ├── store_result.py         # Qdrant write with 3-tier failsafe
 │   │   └── store_buffer.py         # Local JSONL fallback buffer (last resort)
@@ -483,6 +488,31 @@ alert rules in `monitoring/alerts.yml`.
 | Web search | DuckDuckGo | Tavily | No API key or quota; internal deployment |
 | Dedup | Pre-pipeline cosine ≥ 0.95 | Post-pipeline result cache | Short-circuits before any LLM calls; threshold tunable |
 | Trend aggregation | Batch after pipeline | Kafka Streams / Flink | Current scale doesn't justify streaming processor overhead |
+
+---
+
+## Scope & Limitations
+
+What this is and isn't — stated plainly, because the honest framing is the point.
+
+- **Home-lab scale, not production HA.** Two laptops on a LAN, single-node k3s, one replica per
+  service. The resilience patterns below (retries, DLT, store-retry, health gating) are real and
+  test-exercised, but this is not a hardened multi-node system.
+- **vLLM runs off-cluster, over the LAN — and that's fragile.** The GPU lives on a separate
+  machine reached via a headless Service. Large structured-output requests can black-hole if the
+  path MTU is wrong (notably over WiFi, where the cluster's VXLAN MTU clashes with the link). A
+  wired 1500-MTU LAN avoids it; over WiFi it needs an MTU/MSS workaround.
+- **Single GPU backend by default.** The load-aware router and "distributed inference" support N
+  backends, but the default deploy runs **one** vLLM and the analyzer talks to it directly. The
+  router (`router.rs`) is implemented and optional, not always-on.
+- **Model cascade needs a second GPU.** The 1.5B draft model runs bare-metal on another card;
+  when it's down, routing falls back to keywords and analysis falls back to the 7B.
+- **Small context window (1024 tokens).** Tuned to the short feedback this handles; it also
+  usefully bounds per-stage output length. Raising it without per-stage `max_tokens` caps
+  regresses end-to-end latency sharply.
+- **Demo-scale & demo-auth.** Trend aggregation is batch (not streaming); API-key auth is optional
+  and off by default; the chatbot's customer DB is SQLite with seed users — not real identity.
+- **Benchmarks are single-setup measurements**, not a controlled cross-hardware study.
 
 ---
 

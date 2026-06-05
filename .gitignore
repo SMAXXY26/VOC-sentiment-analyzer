@@ -50,6 +50,7 @@ data.xlsx
 STEPS.md
 CLAUDE.md
 LEARNINGS_*.md
+TEARDOWN.md
 
 # ── IDE & editor config ────────────────────────────────────────────────────────
 .vscode/
