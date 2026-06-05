@@ -7,6 +7,15 @@ export interface FeedbackAnalysis {
   signals: { churn_risk: boolean; upsell_opportunity: boolean; feature_requests: string[]; bug_reports: string[]; competitor_mentions: string[] };
   risk: { escalate: boolean; risk_level: string; reason: string; suggested_action: string };
   executive: { executive_summary: string; key_action_items: string[]; priority_recommendations: string[]; overall_health_score: number };
+  experience?: {
+    csi: {
+      product_quality: number; delivery: number; commercial_process: number; marketing_performance: number;
+      complaint_handling: number; company_personnel: number; technical_support: number; relation_building: number;
+    };
+    cxi: { satisfaction: number; loyalty: number; advocacy: number; value_for_money: number };
+    csi_percent: number;
+    cxi_percent: number;
+  };
 }
 
 // Flat shape stored in Qdrant (used by /analyses)
@@ -33,6 +42,8 @@ export interface AnalysesSummary {
   escalation_count: number;
   churn_count: number;
   avg_intensity: number;
+  avg_csi: number;
+  avg_cxi: number;
   top_categories: Record<string, number>;
   top_feature_requests: string[];
   error?: string;

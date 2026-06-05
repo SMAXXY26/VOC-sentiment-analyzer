@@ -11,7 +11,10 @@ _prompt = ChatPromptTemplate.from_messages(
             (
                 "You are a customer risk analyst. Assess whether feedback requires escalation "
                 "and assign a risk level. Escalate when: legal threats, safety concerns, "
-                "high-value customer churn risk, repeated failures, or extreme dissatisfaction."
+                "high-value customer churn risk, repeated failures, or extreme dissatisfaction. "
+                "Weigh the evidence in the feedback itself above sentiment alone — a calmly worded "
+                "legal or safety issue still escalates; venting without real risk does not. "
+                "Make suggested_action concrete and assignable, not generic advice."
             ),
         ),
         (

@@ -28,6 +28,7 @@ def _store(ctx: dict) -> dict:
         signals=ctx["signals"],
         risk=ctx["risk"],
         executive=ctx["executive"],
+        experience=ctx.get("experience"),
         pipeline_confidence=ctx.get("pipeline_confidence"),
         needs_review=ctx.get("needs_review"),
     )

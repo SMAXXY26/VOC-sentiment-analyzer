@@ -4,11 +4,14 @@ metadata:
   name: analyzer-config
   namespace: cx-pipeline
 data:
-  # Inference goes through the load-aware Rust router (k8s/router/), which proxies
-  # to the real vLLM GPU backends listed in its VLLM_ENDPOINTS. Do NOT also set
-  # VLLM_ENDPOINTS here — the analyzer should treat the router as a single endpoint
-  # and let it do the load balancing. Point straight at vllm:8000 to bypass it.
-  VLLM_BASE_URL: "http://router:8100/v1"
+  # Inference path. The load-aware Rust router (k8s/router/, image cx-router) was never
+  # added to the build/import workflow, so the `router` pod wasn't deployed and the analyzer
+  # was calling a dead service (every completion -> APIConnectionError). With a single vLLM
+  # backend the router only adds a failure point, so we point straight at vllm:8000.
+  # To re-enable the router later: build+import cx-router from kafka_queue/src/bin/router.rs,
+  # `kubectl apply -f k8s/router/`, then set this back to http://router:8100/v1. Do NOT set
+  # VLLM_ENDPOINTS here — list backends in the router's config, not the analyzer's.
+  VLLM_BASE_URL: "http://vllm:8000/v1"
   QDRANT_URL: "http://qdrant:6333"
   EMBEDDER_URL: "http://embedder:8081"
   MODEL_NAME: "Qwen/Qwen2.5-7B-Instruct-AWQ"

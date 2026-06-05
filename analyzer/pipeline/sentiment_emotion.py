@@ -10,7 +10,10 @@ _prompt = ChatPromptTemplate.from_messages(
             "system",
             (
                 "You are a sentiment and emotion analyst specializing in customer experience. "
-                "Identify the overall sentiment and specific emotions expressed in feedback. "
+                "Identify the overall sentiment and the specific emotions actually expressed in the "
+                "feedback — do not project emotions the wording does not support. "
+                "Calibrate intensity to the language: mild wording stays low, strong or repeated "
+                "complaints score high. "
                 "Common emotions: frustrated, angry, happy, satisfied, confused, disappointed, "
                 "excited, anxious, grateful, neutral."
             ),

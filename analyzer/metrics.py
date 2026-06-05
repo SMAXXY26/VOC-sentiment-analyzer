@@ -60,8 +60,8 @@ LLM_COMPLETION_TOKENS_TOTAL = Counter(
 )
 
 # The dedup optimization, quantified: LLM calls the short-circuit avoided. Each cache
-# hit skips the whole LLM section of the pipeline (the 6 LLM stages below).
-LLM_STAGES = 6  # semantic_enrichment, taxonomy, sentiment, signals, risk, executive
+# hit skips the whole LLM section of the pipeline (the 7 LLM stages below).
+LLM_STAGES = 7  # semantic_enrichment, taxonomy, sentiment, signals, risk, executive, experience_scoring
 LLM_CALLS_SAVED_TOTAL = Counter(
     "llm_calls_saved_total",
     "Estimated LLM calls avoided by the dedup short-circuit (LLM_STAGES per cache hit)",

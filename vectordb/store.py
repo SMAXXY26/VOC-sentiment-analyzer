@@ -44,6 +44,11 @@ def store_analysis(
             # Full serialized analysis — used by the dedup short-circuit in analyze_single
             "analysis_json": analysis.model_dump_json(),
         }
+        # CSI / CX index percentages — flattened so /analyses/summary can average them
+        # cheaply without deserializing analysis_json. Absent on pre-feature analyses.
+        if analysis.experience:
+            payload["csi_score"] = analysis.experience.csi_percent
+            payload["cxi_score"] = analysis.experience.cxi_percent
         client.upsert(
             collection_name=ANALYSES_COLLECTION,
             points=[PointStruct(id=str(uuid.uuid4()), vector=vector, payload=payload)],

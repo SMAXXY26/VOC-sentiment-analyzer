@@ -86,6 +86,7 @@ def analyze_single(
         signals=ctx["signals"],
         risk=ctx["risk"],
         executive=ctx["executive"],
+        experience=ctx.get("experience"),
         pipeline_confidence=ctx.get("pipeline_confidence"),
         needs_review=ctx.get("needs_review"),
     )

@@ -9,9 +9,11 @@ _prompt = ChatPromptTemplate.from_messages(
         (
             "system",
             (
-                "You are a customer experience analyst. "
-                "Analyze the feedback and extract structured semantic information. "
-                "Be concise and factual."
+                "You are a senior customer experience analyst. "
+                "Extract structured semantic information grounded strictly in the feedback text. "
+                "Use the similar past feedback only as background context — never copy its details "
+                "into this item. Be concise and factual; do not infer entities or topics the "
+                "customer did not actually mention."
             ),
         ),
         (

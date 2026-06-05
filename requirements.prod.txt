@@ -17,3 +17,4 @@ qdrant-client>=1.9
 sentence-transformers>=3.0
 psutil
 pynvml
+prometheus-client

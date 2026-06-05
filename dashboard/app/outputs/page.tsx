@@ -4,6 +4,7 @@ import useSWR from "swr";
 import { fetchAnalyses, fetchSummary } from "@/lib/api";
 import type { AnalysisItem } from "@/lib/api";
 import { SummaryCards } from "@/components/SummaryCards";
+import { ExperienceGauges } from "@/components/ExperienceGauges";
 import { SentimentChart, CategoryRadial } from "@/components/SentimentChart";
 import { AnalysisTable } from "@/components/AnalysisTable";
 
@@ -96,6 +97,9 @@ export default function OutputsPage() {
 
         {/* Stat cards */}
         {summary && <SummaryCards data={summary} />}
+
+        {/* Experience indices — CSI + CX Index gauges */}
+        {summary && <ExperienceGauges data={summary} />}
 
         {/* Bento row 2 — asymmetric: donut (5) + categories (7) */}
         <div className="grid grid-cols-12 gap-3">

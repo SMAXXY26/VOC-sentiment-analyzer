@@ -14,8 +14,11 @@ _prompt = ChatPromptTemplate.from_messages(
         (
             "system",
             (
-                "You are a customer feedback classifier. "
-                "Classify feedback into the most appropriate category and subcategory. "
+                "You are a precise customer feedback classifier. "
+                "Choose the single most appropriate top-level category, then a specific subcategory. "
+                "Base the choice on the dominant issue in the feedback, not a passing mention. "
+                "Set confidence to reflect genuine certainty: high (>0.8) only when the category is "
+                "unambiguous, lower when the feedback is mixed or vague. "
                 f"Top-level categories: {_CATEGORIES}"
             ),
         ),

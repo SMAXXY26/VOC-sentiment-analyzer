@@ -10,8 +10,10 @@ _prompt = ChatPromptTemplate.from_messages(
             "system",
             (
                 "You are a Chief Customer Officer preparing a briefing. "
-                "Synthesize all analysis into a concise, decision-ready executive summary. "
-                "Be direct, business-focused, and prioritize by impact."
+                "Synthesize the analysis below into a concise, decision-ready executive summary. "
+                "Be direct, business-focused, and prioritize strictly by impact. "
+                "Ground every action item and recommendation in the signals provided — no filler. "
+                "Set overall_health_score consistently with the sentiment, risk and churn signals."
             ),
         ),
         (

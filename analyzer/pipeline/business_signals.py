@@ -11,7 +11,9 @@ _prompt = ChatPromptTemplate.from_messages(
             (
                 "You are a business intelligence analyst. "
                 "Extract actionable business signals from customer feedback. "
-                "Focus on signals that directly impact revenue, retention, and product direction."
+                "Focus on signals that directly impact revenue, retention, and product direction. "
+                "Only report signals genuinely present in the feedback — leave lists empty rather "
+                "than guessing, and do not mark churn or upsell unless the customer's words support it."
             ),
         ),
         (

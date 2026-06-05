@@ -49,6 +49,7 @@ data.csv
 data.xlsx
 STEPS.md
 CLAUDE.md
+LEARNINGS_*.md
 
 # ── IDE & editor config ────────────────────────────────────────────────────────
 .vscode/

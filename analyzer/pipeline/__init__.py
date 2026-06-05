@@ -2,6 +2,7 @@ from ..metrics import timed_stage
 from .business_signals import business_signals_stage
 from .confidence_stage import confidence_stage
 from .executive_intelligence import executive_intelligence_stage
+from .experience_scoring import experience_scoring_stage
 from .normalization import normalization_stage
 from .pii_redaction import pii_redaction_stage
 from .risk_escalation import risk_escalation_stage
@@ -28,6 +29,7 @@ pipeline = (
     | timed_stage("business_signals", business_signals_stage)
     | timed_stage("risk_escalation", risk_escalation_stage)
     | timed_stage("executive_intelligence", executive_intelligence_stage)
+    | timed_stage("experience_scoring", experience_scoring_stage)
     | timed_stage("confidence", confidence_stage)
     | timed_stage("store_result", store_result_stage)
 )

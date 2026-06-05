@@ -23,7 +23,10 @@ from analyzer.pipeline.normalization import normalization_stage
 from analyzer.pipeline.pii_redaction import pii_redaction_stage
 from analyzer.schemas import (
     BusinessSignals,
+    CustomerExperienceIndex,
+    CustomerSatisfactionIndex,
     ExecutiveIntelligence,
+    ExperienceScores,
     FeedbackAnalysis,
     NormalizedFeedback,
     RedactedFeedback,
@@ -178,6 +181,15 @@ class TestFullPipelineMocked:
         ctx["signals"] = _mock_llm_output(BusinessSignals)
         ctx["risk"] = _mock_llm_output(RiskEscalation)
         ctx["executive"] = _mock_llm_output(ExecutiveIntelligence)
+        ctx["experience"] = ExperienceScores(
+            csi=CustomerSatisfactionIndex(
+                product_quality=3, delivery=3, commercial_process=2, marketing_performance=3,
+                complaint_handling=1, company_personnel=2, technical_support=1, relation_building=2,
+            ),
+            cxi=CustomerExperienceIndex(satisfaction=2, loyalty=1, advocacy=1, value_for_money=2),
+            csi_percent=43.8,
+            cxi_percent=25.0,
+        )
         return ctx
 
     def test_single_feedback_mocked(self):
@@ -196,6 +208,9 @@ class TestFullPipelineMocked:
         assert result.signals.churn_risk is True
         assert result.risk.escalate is True
         assert result.executive.overall_health_score == 2
+        assert result.experience is not None
+        assert result.experience.csi_percent == 43.8
+        assert result.experience.cxi.satisfaction == 2
 
 
 # ── Live pipeline test (requires vLLM on localhost:8000) ─────────────────────

@@ -79,6 +79,34 @@ class ExecutiveIntelligence(BaseModel):
     overall_health_score: int = Field(description="Customer experience health score 1-10", ge=1, le=10)
 
 
+class CustomerSatisfactionIndex(BaseModel):
+    # Eight equally-weighted dimensions, each scored 1 (very poor) to 6 (excellent).
+    product_quality: int = Field(description="Quality of the product itself", ge=1, le=6)
+    delivery: int = Field(description="Delivery / fulfilment speed and reliability", ge=1, le=6)
+    commercial_process: int = Field(description="Ordering, pricing, billing and purchase process", ge=1, le=6)
+    marketing_performance: int = Field(description="Accuracy of marketing vs. actual experience", ge=1, le=6)
+    complaint_handling: int = Field(description="How complaints/issues were resolved", ge=1, le=6)
+    company_personnel: int = Field(description="Competence and attitude of staff dealt with", ge=1, le=6)
+    technical_support: int = Field(description="Quality of technical / product support", ge=1, le=6)
+    relation_building: int = Field(description="Ongoing relationship and trust with the customer", ge=1, le=6)
+
+
+class CustomerExperienceIndex(BaseModel):
+    # Four equally-weighted dimensions, each scored 1 (very poor) to 6 (excellent).
+    satisfaction: int = Field(description="Overall satisfaction with the experience", ge=1, le=6)
+    loyalty: int = Field(description="Likelihood of staying / repurchasing", ge=1, le=6)
+    advocacy: int = Field(description="Likelihood of recommending to others", ge=1, le=6)
+    value_for_money: int = Field(description="Perceived value relative to price paid", ge=1, le=6)
+
+
+class ExperienceScores(BaseModel):
+    csi: CustomerSatisfactionIndex
+    cxi: CustomerExperienceIndex
+    # Percentages computed deterministically in experience_scoring_stage: (mean(dims) / 6) * 100.
+    csi_percent: float = Field(default=0.0, description="CSI as a percentage (mean of 8 dims / 6 * 100)")
+    cxi_percent: float = Field(default=0.0, description="CXI as a percentage (mean of 4 dims / 6 * 100)")
+
+
 class FeedbackAnalysis(BaseModel):
     normalized: NormalizedFeedback
     redacted: RedactedFeedback
@@ -88,6 +116,8 @@ class FeedbackAnalysis(BaseModel):
     signals: BusinessSignals
     risk: RiskEscalation
     executive: ExecutiveIntelligence
+    # Computed by experience_scoring_stage — None for analyses loaded from cache / pre-feature era
+    experience: Optional[ExperienceScores] = None
     # Computed by confidence_stage — None for analyses loaded from cache / pre-confidence era
     pipeline_confidence: Optional[float] = None
     needs_review: Optional[bool] = None

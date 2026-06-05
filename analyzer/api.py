@@ -195,6 +195,11 @@ def analyses_summary():
         escalation_count = sum(1 for p in all_points if p.payload.get("escalate"))
         churn_count = sum(1 for p in all_points if p.payload.get("churn_risk"))
 
+        # Customer Satisfaction / Experience indices — average the per-item percentages.
+        # Older points without these fields are simply excluded from the mean.
+        csi_scores = [p.payload["csi_score"] for p in all_points if p.payload.get("csi_score") is not None]
+        cxi_scores = [p.payload["cxi_score"] for p in all_points if p.payload.get("cxi_score") is not None]
+
         # Aggregate feature requests from the SAME filtered points (not a separate
         # unfiltered scan) so seed-derived features don't leak onto the dashboard.
         feature_counts: Counter = Counter()
@@ -208,6 +213,8 @@ def analyses_summary():
             "escalation_count": escalation_count,
             "churn_count": churn_count,
             "avg_intensity": round(sum(intensities) / len(intensities), 1) if intensities else 0,
+            "avg_csi": round(sum(csi_scores) / len(csi_scores), 1) if csi_scores else 0,
+            "avg_cxi": round(sum(cxi_scores) / len(cxi_scores), 1) if cxi_scores else 0,
             "top_categories": dict(categories.most_common(5)),
             "top_feature_requests": [f for f, _ in feature_counts.most_common(20)],
         }
