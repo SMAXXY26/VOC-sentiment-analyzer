@@ -163,6 +163,21 @@ def _exclude_seed_filter():
     return Filter(must_not=[FieldCondition(key="source", match=MatchValue(value=SEED_SOURCE))])
 
 
+# Higher = more urgent. Items are sorted by this descending so escalations and
+# high-risk/churn feedback surface first in the dashboard list.
+_RISK_RANK = {"critical": 3, "high": 2, "medium": 1, "low": 0}
+
+
+def _priority_key(item: dict):
+    risk = _RISK_RANK.get(str(item.get("risk_level", "")).lower(), 0)
+    return (risk, 1 if item.get("escalate") else 0, 1 if item.get("churn_risk") else 0)
+
+
+def _by_priority(items: list[dict]) -> list[dict]:
+    """Sort highest-priority first; stable, so semantic/scroll order breaks ties."""
+    return sorted(items, key=_priority_key, reverse=True)
+
+
 @app.get("/analyses")
 def list_analyses(limit: int = 50, offset: int = 0, q: Optional[str] = None):
     try:
@@ -170,9 +185,10 @@ def list_analyses(limit: int = 50, offset: int = 0, q: Optional[str] = None):
         from vectordb.store import search
 
         if q and q.strip():
-            results = search(q.strip(), k=limit)
-            # search() has no payload filter, so drop seed items here.
-            results = [r for r in results if r.get("source") != SEED_SOURCE]
+            # Exclude seed items server-side so they don't consume the top-k slots
+            # (filtering after the search left real results starved → empty list).
+            results = search(q.strip(), k=limit, query_filter=_exclude_seed_filter())
+            results = _by_priority(results)
             return {"items": results, "total": len(results)}
         client = get_client()
         points, _ = client.scroll(
@@ -182,7 +198,8 @@ def list_analyses(limit: int = 50, offset: int = 0, q: Optional[str] = None):
             offset=offset,
             with_payload=True,
         )
-        return {"items": [p.payload for p in points], "total": len(points)}
+        items = _by_priority([p.payload for p in points])
+        return {"items": items, "total": len(items)}
     except Exception as e:
         return {"items": [], "total": 0, "error": str(e)}
 

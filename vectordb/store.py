@@ -145,7 +145,7 @@ def get_analysis_by_id(feedback_id: str) -> "Optional[FeedbackAnalysis]":
     return None
 
 
-def search(query: str, k: int = 10) -> list[dict]:
+def search(query: str, k: int = 10, query_filter: Optional[Filter] = None) -> list[dict]:
     try:
         client = get_client()
         vector = embed(query)
@@ -153,6 +153,7 @@ def search(query: str, k: int = 10) -> list[dict]:
             collection_name=ANALYSES_COLLECTION,
             query_vector=vector,
             limit=k,
+            query_filter=query_filter,
         )
         return [{"score": h.score, **h.payload} for h in hits]
     except Exception:
