@@ -26,6 +26,7 @@ struct Config {
     analyzed_topic: String,
     failed_topic: String,
     analyzer_url: String,
+    analyzer_api_key: String,
     group_id: String,
     max_concurrent: usize,
 }
@@ -41,6 +42,8 @@ impl Config {
                 .unwrap_or_else(|_| "feedback.failed".into()),
             analyzer_url: std::env::var("ANALYZER_URL")
                 .unwrap_or_else(|_| "http://localhost:8080/analyze".into()),
+            // Sent as X-API-Key when the analyzer enforces auth (API_KEY set). Empty = omit.
+            analyzer_api_key: std::env::var("ANALYZER_API_KEY").unwrap_or_default(),
             group_id: std::env::var("KAFKA_GROUP_ID")
                 .unwrap_or_else(|_| "cx-analyzer-group".into()),
             max_concurrent: std::env::var("MAX_CONCURRENT")
@@ -229,7 +232,8 @@ async fn process_job(
     info!(feedback_id = %job.feedback_id, "Processing job");
     gauge!("consumer_active_jobs").increment(1.0);
 
-    let analysis = call_analyzer_with_retry(http, &config.analyzer_url, &job).await;
+    let analysis =
+        call_analyzer_with_retry(http, &config.analyzer_url, &config.analyzer_api_key, &job).await;
 
     let elapsed = start.elapsed().as_secs_f64();
     gauge!("consumer_active_jobs").decrement(1.0);
@@ -335,6 +339,7 @@ async fn process_job(
 async fn call_analyzer_with_retry(
     http: &Client,
     url: &str,
+    api_key: &str,
     job: &AnalysisJob,
 ) -> Result<serde_json::Value, String> {
     let mut last_err = String::new();
@@ -355,16 +360,15 @@ async fn call_analyzer_with_retry(
         // (was: analyzer minted a fresh UUID, breaking traceability between the Kafka
         // job, the analyzed-topic result, and the Qdrant record). Also forward the
         // producer's model routing hint (null when absent → analyzer's default model).
-        match http
-            .post(url)
-            .json(&serde_json::json!({
-                "text": job.payload.text,
-                "feedback_id": job.feedback_id,
-                "model": job.target_model,
-            }))
-            .send()
-            .await
-        {
+        let mut req = http.post(url).json(&serde_json::json!({
+            "text": job.payload.text,
+            "feedback_id": job.feedback_id,
+            "model": job.target_model,
+        }));
+        if !api_key.is_empty() {
+            req = req.header("X-API-Key", api_key);
+        }
+        match req.send().await {
             Ok(resp) if resp.status().is_success() => {
                 return resp
                     .json::<serde_json::Value>()
@@ -477,7 +481,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/analyze", server.uri());
-        let result = call_analyzer_with_retry(&http, &url, &make_job()).await;
+        let result = call_analyzer_with_retry(&http, &url, "", &make_job()).await;
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap()["sentiment"], "positive");
@@ -500,7 +504,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/analyze", server.uri());
-        let result = call_analyzer_with_retry(&http, &url, &make_job()).await;
+        let result = call_analyzer_with_retry(&http, &url, "", &make_job()).await;
 
         assert!(result.is_ok(), "expected Ok after retry, got {:?}", result);
     }
@@ -516,7 +520,7 @@ mod tests {
 
         let http = Client::new();
         let url = format!("{}/analyze", server.uri());
-        let result = call_analyzer_with_retry(&http, &url, &make_job()).await;
+        let result = call_analyzer_with_retry(&http, &url, "", &make_job()).await;
 
         assert!(result.is_err());
         assert!(
@@ -533,7 +537,8 @@ mod tests {
             .build()
             .unwrap();
         let result =
-            call_analyzer_with_retry(&http, "http://127.0.0.1:19753/analyze", &make_job()).await;
+            call_analyzer_with_retry(&http, "http://127.0.0.1:19753/analyze", "", &make_job())
+                .await;
 
         assert!(result.is_err(), "connection refused should produce Err");
     }
