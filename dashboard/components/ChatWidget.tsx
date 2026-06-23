@@ -1,9 +1,10 @@
 "use client";
 import { useState } from "react";
 import { startChat, ChatMessage } from "@/lib/api";
+import { getUser } from "@/lib/auth";
 import { ChatWindow } from "./ChatWindow";
 
-type State = "closed" | "login" | "chat";
+type State = "closed" | "connecting" | "login" | "chat";
 
 export function ChatWidget() {
   const [state, setState] = useState<State>("closed");
@@ -15,25 +16,43 @@ export function ChatWidget() {
   const [loading, setLoading] = useState(false);
   const [initialMessages, setInitialMessages] = useState<ChatMessage[]>([]);
 
-  async function login() {
-    if (!username.trim()) return;
+  // Start a session for the given identity (no password = anonymous, named session).
+  async function startSession(user: string, pass?: string) {
     setLoading(true);
     setError("");
     try {
-      const res = await startChat(username.trim(), password || undefined);
+      const res = await startChat(user, pass);
       setSessionId(res.session_id);
-      setCustomerName(res.customer_name || username);
-      if (res.reply) setInitialMessages([{ role: "assistant", content: res.reply }]);
+      setCustomerName(res.customer_name || user);
+      setInitialMessages(res.reply ? [{ role: "assistant", content: res.reply }] : []);
       setState("chat");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Login failed");
+      setError(e instanceof Error ? e.message : "Couldn't start chat");
+      setState("login");
     } finally {
       setLoading(false);
     }
   }
 
+  // Opening the widget: auto-start as the logged-in dashboard user (one login for
+  // both). Falls back to the manual login form only if somehow not signed in.
+  function open() {
+    const user = getUser();
+    if (user) {
+      setState("connecting");
+      startSession(user);
+    } else {
+      setState("login");
+    }
+  }
+
+  function login() {
+    if (!username.trim()) return;
+    startSession(username.trim(), password || undefined);
+  }
+
   function reset() {
-    setState("login");
+    setState("closed");
     setSessionId("");
     setInitialMessages([]);
     setUsername("");
@@ -46,6 +65,12 @@ export function ChatWidget() {
       {/* Expanded panel */}
       {state !== "closed" && (
         <div className="w-[360px] max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden bg-white/95 dark:bg-[#0a0f1e]/95 backdrop-blur-2xl border border-slate-200/70 dark:border-white/[0.10] shadow-2xl shadow-black/20 dark:shadow-black/50 animate-fade-in">
+          {state === "connecting" && (
+            <div className="p-8 flex flex-col items-center justify-center gap-3">
+              <div className="w-6 h-6 border-2 border-indigo-500/30 border-t-indigo-400 rounded-full animate-spin" />
+              <p className="text-[11px] text-slate-500">Starting your chat…</p>
+            </div>
+          )}
           {state === "login" && (
             <div className="p-5">
               <p className="text-sm font-semibold text-slate-900 dark:text-white mb-0.5">CX Support Chat</p>
@@ -98,7 +123,7 @@ export function ChatWidget() {
 
       {/* Bubble button */}
       <button
-        onClick={() => setState(s => s === "closed" ? "login" : "closed")}
+        onClick={() => (state === "closed" ? open() : setState("closed"))}
         className="w-12 h-12 rounded-full bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 flex items-center justify-center shadow-lg shadow-indigo-500/20 transition-all cursor-pointer"
         aria-label="Open support chat"
       >
