@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useTheme } from "@/components/ThemeProvider";
 
 const NAV_ITEMS = [
   {
@@ -45,22 +46,23 @@ const NAV_ITEMS = [
 export function Nav() {
   const path = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const { theme, toggle } = useTheme();
   return (
     <nav
-      className={`shrink-0 h-screen flex flex-col gap-1 p-3 bg-black/40 backdrop-blur-2xl border-r border-white/[0.08] shadow-xl shadow-black/30 transition-all duration-300 ${
-        collapsed ? "w-16" : "w-52"
+      className={`shrink-0 md:h-screen flex md:flex-col gap-1 p-3 bg-white/70 dark:bg-black/40 backdrop-blur-2xl border-b md:border-b-0 md:border-r border-slate-200 dark:border-white/[0.08] shadow-xl shadow-black/5 dark:shadow-black/30 transition-all duration-300 ${
+        collapsed ? "md:w-16" : "md:w-52"
       }`}
     >
       {/* Logo */}
-      <div className="flex items-center gap-2 mb-2 pb-3 border-b border-white/[0.08]">
+      <div className="flex items-center gap-2 md:mb-2 md:pb-3 md:border-b border-slate-200 dark:border-white/[0.08]">
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 shrink-0">
           <span className="text-white text-[11px] font-bold tracking-tight">CX</span>
         </div>
-        {!collapsed && <span className="font-semibold text-sm text-white/90 tracking-tight whitespace-nowrap">Analyzer</span>}
+        {!collapsed && <span className="font-semibold text-sm text-slate-800 dark:text-white/90 tracking-tight whitespace-nowrap">Analyzer</span>}
       </div>
 
       {/* Links */}
-      <div className="flex flex-col gap-1 flex-1">
+      <div className="flex md:flex-col gap-1 flex-1">
         {NAV_ITEMS.map((item) => {
           const active = path.startsWith(item.href);
           return (
@@ -69,11 +71,11 @@ export function Nav() {
               href={item.href}
               title={item.label}
               className={`flex items-center gap-2.5 text-xs font-medium px-3 py-2 rounded-xl transition-all duration-200 cursor-pointer select-none ${
-                collapsed ? "justify-center" : ""
+                collapsed ? "md:justify-center" : ""
               } ${
                 active
-                  ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/25 shadow-sm shadow-indigo-500/10"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.05]"
+                  ? "bg-indigo-500/15 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 border border-indigo-500/25 shadow-sm shadow-indigo-500/10"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-900/[0.04] dark:hover:bg-white/[0.05]"
               }`}
             >
               <span className="shrink-0">{item.icon}</span>
@@ -84,7 +86,7 @@ export function Nav() {
       </div>
 
       {/* Live indicator */}
-      <div className={`flex items-center gap-1.5 py-2 ${collapsed ? "justify-center" : "px-3"}`}>
+      <div className={`hidden md:flex items-center gap-1.5 py-2 ${collapsed ? "justify-center" : "px-3"}`}>
         <span className="relative flex h-2 w-2 shrink-0">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-50" />
           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
@@ -92,11 +94,33 @@ export function Nav() {
         {!collapsed && <span className="text-[11px] text-slate-500">Live</span>}
       </div>
 
-      {/* Collapse toggle */}
+      {/* Theme toggle */}
+      <button
+        onClick={toggle}
+        title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        className={`flex items-center gap-2.5 text-xs font-medium px-3 py-2 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-900/[0.04] dark:hover:bg-white/[0.05] transition-all duration-200 cursor-pointer select-none ${
+          collapsed ? "md:justify-center" : ""
+        }`}
+      >
+        {theme === "dark" ? (
+          // Sun
+          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
+          </svg>
+        ) : (
+          // Moon
+          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" />
+          </svg>
+        )}
+        {!collapsed && <span className="whitespace-nowrap">{theme === "dark" ? "Light" : "Dark"} mode</span>}
+      </button>
+
+      {/* Collapse toggle (desktop only) */}
       <button
         onClick={() => setCollapsed((c) => !c)}
         title={collapsed ? "Expand" : "Collapse"}
-        className={`flex items-center gap-2.5 text-xs font-medium px-3 py-2 rounded-xl text-slate-500 hover:text-slate-200 hover:bg-white/[0.05] transition-all duration-200 cursor-pointer select-none ${
+        className={`hidden md:flex items-center gap-2.5 text-xs font-medium px-3 py-2 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-900/[0.04] dark:hover:bg-white/[0.05] transition-all duration-200 cursor-pointer select-none ${
           collapsed ? "justify-center" : ""
         }`}
       >

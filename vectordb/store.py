@@ -3,6 +3,7 @@ High-level vector DB operations used by the pipeline.
 All public functions gracefully degrade if Qdrant is unreachable.
 """
 
+import time
 import uuid
 from typing import TYPE_CHECKING, Optional
 
@@ -30,6 +31,9 @@ def store_analysis(
         payload = {
             "feedback_id": feedback_id,
             "source": source,
+            # Unix epoch seconds — used by the dashboard's date-wise volume chart and
+            # by time-window queries (drift / retrieval). Only set going forward.
+            "stored_at": time.time(),
             "summary": summary,
             "raw_text": raw_text[:500],  # truncate to avoid large payloads
             "category": analysis.taxonomy.category,

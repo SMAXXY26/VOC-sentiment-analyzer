@@ -19,9 +19,9 @@ function ScoreChip({ label, value, variant = "default" }: {
   variant?: "default" | "warn" | "accent";
 }) {
   const colors = {
-    default: "text-slate-200 border-white/[0.08] bg-white/[0.03]",
-    warn: "text-red-300 border-red-500/20 bg-red-500/[0.08]",
-    accent: "text-indigo-300 border-indigo-500/20 bg-indigo-500/[0.08]",
+    default: "text-slate-800 dark:text-slate-200 border-slate-200/70 dark:border-white/[0.08] bg-slate-900/[0.03] dark:bg-white/[0.03]",
+    warn: "text-red-600 dark:text-red-300 border-red-500/20 bg-red-500/[0.08]",
+    accent: "text-indigo-600 dark:text-indigo-300 border-indigo-500/20 bg-indigo-500/[0.08]",
   };
   return (
     <div className={`rounded-xl border px-4 py-3 ${colors[variant]}`}>
@@ -43,7 +43,7 @@ function HealthOrb({ score }: { score: number }) {
         <span className="text-lg font-bold" style={{ color }}>{score}</span>
       </div>
       <div>
-        <p className="text-sm font-semibold text-slate-200">{label}</p>
+        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{label}</p>
         <p className="text-xs text-slate-500">Health Score / 10</p>
       </div>
     </div>
@@ -75,7 +75,7 @@ export default function AnalyzePage() {
     <div className="max-w-3xl mx-auto space-y-4 animate-fade-in">
       {/* Header */}
       <div className="py-2">
-        <h1 className="text-lg font-semibold text-white tracking-tight">Analyze Feedback</h1>
+        <h1 className="text-lg font-semibold text-slate-900 dark:text-white tracking-tight">Analyze Feedback</h1>
         <p className="text-xs text-slate-500 mt-0.5">Run the 10-stage LLM pipeline on any customer feedback</p>
       </div>
 
@@ -86,14 +86,14 @@ export default function AnalyzePage() {
           onChange={(e) => setText(e.target.value)}
           placeholder="Paste customer feedback here…"
           rows={5}
-          className="w-full bg-white/[0.03] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/40 resize-none transition-colors font-sans"
+          className="w-full bg-slate-900/[0.03] dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.08] rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/40 resize-none transition-colors font-sans"
         />
         <div className="flex items-center justify-between mt-3">
-          <span className="text-xs text-slate-600 tabular-nums">{text.length} chars</span>
+          <span className="text-xs text-slate-400 dark:text-slate-600 tabular-nums">{text.length} chars</span>
           <button
             onClick={handleSubmit}
             disabled={loading || !text.trim()}
-            className="flex items-center gap-2 px-5 py-2 bg-indigo-500/20 hover:bg-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-300 text-sm font-medium rounded-xl border border-indigo-500/25 transition-all duration-200 cursor-pointer"
+            className="flex items-center gap-2 px-5 py-2 bg-indigo-500/20 hover:bg-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-600 dark:text-indigo-300 text-sm font-medium rounded-xl border border-indigo-500/25 transition-all duration-200 cursor-pointer"
           >
             {loading ? (
               <>
@@ -113,7 +113,7 @@ export default function AnalyzePage() {
       </div>
 
       {error && (
-        <div className="rounded-2xl bg-red-500/[0.08] border border-red-500/20 p-4 text-red-300 text-sm animate-fade-in">
+        <div className="rounded-2xl bg-red-500/[0.08] border border-red-500/20 p-4 text-red-600 dark:text-red-300 text-sm animate-fade-in">
           {error}
         </div>
       )}
@@ -123,7 +123,7 @@ export default function AnalyzePage() {
           {/* Summary + badges */}
           <ResultCard title="Analysis Summary">
             <div className="flex items-start gap-4">
-              <p className="text-slate-200 text-sm leading-relaxed flex-1">{result.enrichment.summary}</p>
+              <p className="text-slate-800 dark:text-slate-200 text-sm leading-relaxed flex-1">{result.enrichment.summary}</p>
               <div className="flex flex-col gap-2 shrink-0">
                 <SentimentBadge value={result.sentiment.sentiment} />
                 <RiskBadge value={result.risk.risk_level} />
@@ -142,11 +142,11 @@ export default function AnalyzePage() {
           {/* Executive + health */}
           <ResultCard title="Executive Intelligence">
             <HealthOrb score={result.executive.overall_health_score} />
-            <p className="text-slate-300 text-sm leading-relaxed mt-4 mb-4">{result.executive.executive_summary}</p>
+            <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed mt-4 mb-4">{result.executive.executive_summary}</p>
             {result.executive.key_action_items?.length > 0 && (
               <ul className="space-y-1.5">
                 {result.executive.key_action_items.map((a, i) => (
-                  <li key={i} className="flex gap-2.5 text-xs text-slate-400">
+                  <li key={i} className="flex gap-2.5 text-xs text-slate-600 dark:text-slate-400">
                     <span className="text-emerald-500 shrink-0 mt-0.5">→</span>{a}
                   </li>
                 ))}
@@ -157,7 +157,7 @@ export default function AnalyzePage() {
           {/* Suggested action */}
           <div className="glass rounded-2xl p-4 border-l-2 border-indigo-500/40 glass-hover">
             <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-1.5">Suggested Action</p>
-            <p className="text-sm text-slate-300">{result.risk.suggested_action}</p>
+            <p className="text-sm text-slate-700 dark:text-slate-300">{result.risk.suggested_action}</p>
           </div>
 
           {/* Emotions */}
@@ -165,7 +165,7 @@ export default function AnalyzePage() {
             <ResultCard title="Emotions Detected">
               <div className="flex flex-wrap gap-1.5">
                 {result.sentiment.emotions.map((e) => (
-                  <span key={e} className="text-xs px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-300 border border-violet-500/20">
+                  <span key={e} className="text-xs px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-300 border border-violet-500/20">
                     {e}
                   </span>
                 ))}
@@ -178,7 +178,7 @@ export default function AnalyzePage() {
             <ResultCard title="Feature Requests">
               <ul className="space-y-1.5">
                 {result.signals.feature_requests.map((f, i) => (
-                  <li key={i} className="flex gap-2.5 text-xs text-slate-400">
+                  <li key={i} className="flex gap-2.5 text-xs text-slate-600 dark:text-slate-400">
                     <span className="text-indigo-500 font-mono shrink-0">{String(i + 1).padStart(2, "0")}.</span>{f}
                   </li>
                 ))}

@@ -43,7 +43,7 @@ export default function ChatPage() {
   return (
     <div className="max-w-2xl mx-auto animate-fade-in">
       <div className="py-2 mb-4">
-        <h1 className="text-lg font-semibold text-white tracking-tight">Support Chat</h1>
+        <h1 className="text-lg font-semibold text-slate-900 dark:text-white tracking-tight">Support Chat</h1>
         <p className="text-xs text-slate-500 mt-0.5">
           Agentic customer support · cascade routing · EDBMS-backed
         </p>
@@ -58,7 +58,7 @@ export default function ChatPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
               </svg>
             </div>
-            <p className="text-sm font-semibold text-white">Sign in to chat</p>
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">Sign in to chat</p>
             <p className="text-[11px] text-slate-500 mt-0.5">Demo accounts: alice, bob, carol · password: pass123</p>
           </div>
           <div className="space-y-3">
@@ -71,7 +71,7 @@ export default function ChatPage() {
                 onChange={e => setUsername(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && login()}
                 autoFocus
-                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/40 transition-colors"
+                className="w-full bg-slate-900/[0.04] dark:bg-white/[0.04] border border-slate-200/70 dark:border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/40 transition-colors"
               />
             </div>
             <div>
@@ -82,7 +82,7 @@ export default function ChatPage() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && login()}
-                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/40 transition-colors"
+                className="w-full bg-slate-900/[0.04] dark:bg-white/[0.04] border border-slate-200/70 dark:border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/40 transition-colors"
               />
             </div>
             {error && (
@@ -96,7 +96,7 @@ export default function ChatPage() {
             <button
               onClick={login}
               disabled={loading || !username.trim()}
-              className="w-full py-2.5 bg-indigo-500/20 hover:bg-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-300 text-sm font-medium rounded-xl border border-indigo-500/25 transition-all cursor-pointer"
+              className="w-full py-2.5 bg-indigo-500/20 hover:bg-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-600 dark:text-indigo-300 text-sm font-medium rounded-xl border border-indigo-500/25 transition-all cursor-pointer"
             >
               {loading ? "Connecting…" : "Start Chat"}
             </button>
@@ -105,13 +105,13 @@ export default function ChatPage() {
       ) : (
         /* Chat window */
         <div className="glass rounded-2xl overflow-hidden" style={{ height: "calc(100vh - 180px)", minHeight: "500px" }}>
-          <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200/70 dark:border-white/[0.06]">
             <div className="flex items-center gap-3">
               <div className="w-7 h-7 rounded-lg bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center">
                 <span className="text-[10px] font-bold text-indigo-400">{customerName[0]?.toUpperCase()}</span>
               </div>
               <div>
-                <p className="text-sm font-medium text-white">{customerName}</p>
+                <p className="text-sm font-medium text-slate-900 dark:text-white">{customerName}</p>
                 {customerTier && (
                   <p className="text-[10px] text-slate-500 capitalize">{customerTier} member</p>
                 )}
@@ -119,7 +119,7 @@ export default function ChatPage() {
             </div>
             <button
               onClick={reset}
-              className="text-xs text-slate-600 hover:text-slate-400 transition-colors cursor-pointer"
+              className="text-xs text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-400 transition-colors cursor-pointer"
             >
               Sign out
             </button>

@@ -31,11 +31,11 @@ function DonutLegend({ data, total }: { data: { name: string; value: number }[];
               className="w-2 h-2 rounded-full shrink-0"
               style={{ background: SENTIMENT_COLORS[d.name] ?? "#6366f1" }}
             />
-            <span className="text-xs text-slate-400 capitalize">{d.name}</span>
+            <span className="text-xs text-slate-600 dark:text-slate-400 capitalize">{d.name}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-slate-200 tabular-nums">{d.value}</span>
-            <span className="text-[10px] text-slate-600 tabular-nums w-8 text-right">
+            <span className="text-xs font-medium text-slate-800 dark:text-slate-200 tabular-nums">{d.value}</span>
+            <span className="text-[10px] text-slate-400 dark:text-slate-600 tabular-nums w-8 text-right">
               {total > 0 ? `${Math.round((d.value / total) * 100)}%` : "—"}
             </span>
           </div>
@@ -52,7 +52,7 @@ export function SentimentChart({ distribution }: { distribution: Record<string, 
   if (!data.length) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-slate-600 text-sm">No data yet.</p>
+        <p className="text-slate-400 dark:text-slate-600 text-sm">No data yet.</p>
       </div>
     );
   }
@@ -87,7 +87,7 @@ export function SentimentChart({ distribution }: { distribution: Record<string, 
           </ResponsiveContainer>
           {/* Center label */}
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-xl font-bold text-white tabular-nums">{total}</span>
+            <span className="text-xl font-bold text-slate-900 dark:text-white tabular-nums">{total}</span>
             <span className="text-[9px] text-slate-500 uppercase tracking-wider">total</span>
           </div>
         </div>
@@ -116,10 +116,10 @@ export function CategoryRadial({ categories }: { categories: Record<string, numb
         {data.map((d, i) => (
           <div key={d.name}>
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-slate-300">{d.name}</span>
+              <span className="text-xs text-slate-700 dark:text-slate-300">{d.name}</span>
               <span className="text-xs font-mono text-slate-500 tabular-nums">{d.value}</span>
             </div>
-            <div className="h-1 rounded-full bg-white/[0.04] overflow-hidden">
+            <div className="h-1 rounded-full bg-slate-900/[0.06] dark:bg-white/[0.04] overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-700"
                 style={{

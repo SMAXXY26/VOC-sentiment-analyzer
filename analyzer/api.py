@@ -1,7 +1,9 @@
 import asyncio
 import os
+import re
 from collections import Counter
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -16,6 +18,22 @@ _allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
 _cors_origins = [o.strip() for o in _allowed_origins_env.split(",") if o.strip()] or ["*"]
 
 _EXEMPT_PATHS = {"/health", "/ready"}
+
+# Common English stopwords + filler terms, excluded from the dashboard word cloud
+# so it surfaces meaningful feedback vocabulary rather than "the", "and", etc.
+_WORD_RE = re.compile(r"[A-Za-z][A-Za-z'-]{2,}")
+_STOPWORDS = frozenset("""
+a an and the of to in is it for on with this that was were be been being have has had
+do does did but or if so as at by from we you they he she them his her our your my me
+i not no yes can will just get got would could should there here what when which who how
+am are isnt arent dont doesnt didnt im ive id ill us about into out up down over under
+than then too very really also more most some any all only even much many lot really
+""".split())
+
+
+def _tokenize_words(text: str) -> list[str]:
+    """Lowercased content words from a blob of feedback text, stopwords removed."""
+    return [w for w in (m.group(0).lower() for m in _WORD_RE.finditer(text)) if w not in _STOPWORDS]
 
 
 async def _require_api_key(request: Request, x_api_key: str = Header(default="")):
@@ -207,6 +225,25 @@ def analyses_summary():
             for feat in p.payload.get("feature_requests") or []:
                 feature_counts[feat] += 1
 
+        # Feedback volume per calendar day (UTC), bucketed from the stored_at epoch.
+        # Points predating the stored_at field are simply skipped. Returned sorted
+        # by date ascending so the dashboard bar chart reads left-to-right.
+        day_counts: Counter = Counter()
+        for p in all_points:
+            ts = p.payload.get("stored_at")
+            if ts is None:
+                continue
+            day = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+            day_counts[day] += 1
+        daily_counts = {d: day_counts[d] for d in sorted(day_counts)}
+
+        # Word-frequency cloud — tokenize the actual feedback text (falling back to
+        # the summary) so the cloud shows the most-used words across all feedback.
+        word_counts: Counter = Counter()
+        for p in all_points:
+            text = p.payload.get("raw_text") or p.payload.get("summary") or ""
+            word_counts.update(_tokenize_words(text))
+
         return {
             "total": len(all_points),
             "sentiment_distribution": dict(sentiments),
@@ -217,6 +254,12 @@ def analyses_summary():
             "avg_cxi": round(sum(cxi_scores) / len(cxi_scores), 1) if cxi_scores else 0,
             "top_categories": dict(categories.most_common(5)),
             "top_feature_requests": [f for f, _ in feature_counts.most_common(20)],
+            # phrase -> frequency (kept for the feature-request list/badges)
+            "feature_request_counts": dict(feature_counts.most_common(40)),
+            # word -> frequency, for the word cloud (most-used words across feedback)
+            "word_frequencies": dict(word_counts.most_common(60)),
+            # "YYYY-MM-DD" -> count, for the date-wise volume bar chart
+            "daily_counts": daily_counts,
         }
     except Exception as e:
         return {"total": 0, "error": str(e)}

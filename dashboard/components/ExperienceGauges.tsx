@@ -28,12 +28,12 @@ function IndexGauge({
               dataKey="value"
               cornerRadius={6}
               fill={color}
-              background={{ fill: "rgba(255,255,255,0.04)" }}
+              background={{ fill: "rgba(148,163,184,0.18)" }}
             />
           </RadialBarChart>
         </ResponsiveContainer>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-lg font-bold text-white">{display}</span>
+          <span className="text-lg font-bold text-slate-900 dark:text-white">{display}</span>
         </div>
       </div>
       <p className="text-[10px] text-slate-500 mt-2 text-center">{sub}</p>
@@ -43,7 +43,7 @@ function IndexGauge({
 
 export function ExperienceGauges({ data }: { data: AnalysesSummary }) {
   return (
-    <div className="rounded-2xl bg-white/[0.03] border border-white/[0.07] p-5">
+    <div className="rounded-2xl bg-slate-900/[0.03] dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.07] p-5">
       <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-slate-500 mb-4">Experience Indices</p>
       <div className="grid grid-cols-2 gap-3">
         <IndexGauge

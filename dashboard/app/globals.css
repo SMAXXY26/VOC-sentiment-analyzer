@@ -3,34 +3,56 @@
 @tailwind utilities;
 
 @layer base {
+  /* Light theme (default when html has no .dark class) */
   body {
+    background-color: #f8fafc;
+    background-image:
+      radial-gradient(ellipse 70% 50% at 15% 0%, rgba(99, 102, 241, 0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 85% 100%, rgba(139, 92, 246, 0.06) 0%, transparent 60%);
+    min-height: 100vh;
+  }
+
+  /* Dark theme */
+  html.dark body {
     background-color: #060b18;
     background-image:
       radial-gradient(ellipse 70% 50% at 15% 0%, rgba(99, 102, 241, 0.13) 0%, transparent 60%),
       radial-gradient(ellipse 60% 40% at 85% 100%, rgba(139, 92, 246, 0.09) 0%, transparent 60%),
       radial-gradient(ellipse 50% 30% at 50% 50%, rgba(6, 11, 24, 1) 0%, transparent 100%);
-    min-height: 100vh;
   }
 
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22); }
+  html.dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); }
+  html.dark ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
 
   * { -webkit-font-smoothing: antialiased; }
 }
 
 @layer utilities {
+  /* Light glass */
   .glass {
-    background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+    background: linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.6) 100%);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255,255,255,0.08);
+    border: 1px solid rgba(15,23,42,0.08);
   }
   .glass-hover {
     transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
   }
   .glass-hover:hover {
+    border-color: rgba(15,23,42,0.14);
+    background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.75) 100%);
+  }
+
+  /* Dark glass */
+  html.dark .glass {
+    background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  html.dark .glass-hover:hover {
     border-color: rgba(255,255,255,0.14);
     background: linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%);
   }

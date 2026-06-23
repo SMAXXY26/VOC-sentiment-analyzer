@@ -46,10 +46,9 @@ def reset_target_model(token) -> None:
     _target_model.reset(token)
 
 
-# Draft (small) model — same env var the chatbot cascade uses, so a single
-# deployment serves both. If unset, "small" silently falls back to the big model.
-_DRAFT_URL: str = os.getenv("DRAFT_LLM_URL", "").rstrip("/")
-_DRAFT_MODEL: str = os.getenv("DRAFT_MODEL_NAME", "Qwen/Qwen2.5-1.5B-Instruct-AWQ")
+# NOTE: the analyzer runs exclusively on the 7B. The draft 1.5B is reserved for the
+# chatbot (see analyzer/chatbot/cascade_llm.py) — analysis never routes to it, so the
+# heavy pipeline can't starve the chatbot's small model and vice versa.
 
 
 # ── Token / call accounting ──────────────────────────────────────────────────
@@ -138,20 +137,12 @@ def _llm_for_endpoint(endpoint: str, temperature: float) -> ChatOpenAI:
         base_url=base,
         api_key="dummy",
         temperature=temperature,
+        # Cap generation so a single structured-output stage can't run to the model's
+        # context ceiling and truncate its JSON mid-object (finish_reason="length" →
+        # .parse() failure). The AWQ model rambles under guided JSON, so give it room
+        # to actually close the object — still well under the 2048 context window.
+        max_tokens=1024,
         max_retries=3,
-        callbacks=[_usage_callback],
-    )
-
-
-@lru_cache(maxsize=4)
-def _draft_llm(temperature: float) -> ChatOpenAI:
-    base = _DRAFT_URL if _DRAFT_URL.endswith("/v1") else _DRAFT_URL + "/v1"
-    return ChatOpenAI(
-        model=_DRAFT_MODEL,
-        base_url=base,
-        api_key="dummy",
-        temperature=temperature,
-        max_retries=2,
         callbacks=[_usage_callback],
     )
 
@@ -161,23 +152,13 @@ def _draft_llm(temperature: float) -> ChatOpenAI:
 
 def get_llm(temperature: float = 0.1, model: str | None = None) -> ChatOpenAI:
     """
-    Return a ChatOpenAI instance for this analysis.
+    Return the analyzer's LLM — always the 7B.
 
-    Model selection (in priority order):
-      1. explicit `model` arg
-      2. the per-request ContextVar set from the job's target_model
-      3. "big" (default)
-
-    "small" routes to the draft model when DRAFT_LLM_URL is configured, else falls
-    back to the big model. "big"/None go to the single base URL (the router, which
-    load-balances across the real GPUs).
+    The `model`/target_model tag is still read so the usage metrics stay labelled,
+    but it no longer changes routing: the analyzer is pinned to the 7B and never
+    uses the chatbot's draft 1.5B. (The label is recorded in the usage callback.)
     """
-    target = model or _target_model.get()
-    if target == "small" and _DRAFT_URL:
-        try:
-            return _draft_llm(temperature)
-        except Exception:
-            pass  # draft unreachable → fall through to big model
+    _ = model or _target_model.get()  # retained for metrics labelling only
     return _llm_for_endpoint(_BASE_URL, temperature)
 
 

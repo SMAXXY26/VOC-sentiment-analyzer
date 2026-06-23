@@ -46,6 +46,9 @@ export interface AnalysesSummary {
   avg_cxi: number;
   top_categories: Record<string, number>;
   top_feature_requests: string[];
+  feature_request_counts?: Record<string, number>;
+  word_frequencies?: Record<string, number>;
+  daily_counts?: Record<string, number>;
   error?: string;
 }
 

@@ -31,18 +31,18 @@ function Gauge({
               dataKey="value"
               cornerRadius={6}
               fill={isHigh ? "#ef4444" : color}
-              background={{ fill: "rgba(255,255,255,0.04)" }}
+              background={{ fill: "rgba(148,163,184,0.18)" }}
             />
           </RadialBarChart>
         </ResponsiveContainer>
         {/* Center value */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-base font-bold text-white">{display}</span>
+          <span className="text-base font-bold text-slate-900 dark:text-white">{display}</span>
           <span className="text-[10px] text-slate-500">{Math.round(pct)}%</span>
         </div>
       </div>
       {/* Thin bottom bar */}
-      <div className="w-full mt-3 h-0.5 rounded-full bg-white/5 overflow-hidden">
+      <div className="w-full mt-3 h-0.5 rounded-full bg-slate-900/10 dark:bg-white/5 overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-500"
           style={{ width: `${pct}%`, backgroundColor: isHigh ? "#ef4444" : color }}

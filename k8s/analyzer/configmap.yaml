@@ -13,7 +13,7 @@ data:
   # VLLM_ENDPOINTS here — list backends in the router's config, not the analyzer's.
   VLLM_BASE_URL: "http://vllm:8000/v1"
   QDRANT_URL: "http://qdrant:6333"
-  EMBEDDER_URL: "http://embedder:8081"
+  EMBEDDER_URL: "http://embedder:8083"
   MODEL_NAME: "Qwen/Qwen2.5-7B-Instruct-AWQ"
   DEDUP_THRESHOLD: "0.95"
   RAG_K: "3"

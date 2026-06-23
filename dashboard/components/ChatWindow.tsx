@@ -85,18 +85,18 @@ export function ChatWindow({ sessionId, initialMessages = [], onEnd, compact = f
   return (
     <div className={`flex flex-col ${compact ? "h-[460px]" : "h-full"}`}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06] shrink-0">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200/70 dark:border-white/[0.06] shrink-0">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute h-full w-full rounded-full bg-emerald-400 opacity-50" />
             <span className="relative h-2 w-2 rounded-full bg-emerald-400" />
           </span>
-          <span className="text-xs font-medium text-slate-300">CX Support</span>
+          <span className="text-xs font-medium text-slate-700 dark:text-slate-300">CX Support</span>
           <ModelChip model={lastModel} />
         </div>
         <button
           onClick={handleEnd}
-          className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors cursor-pointer"
+          className="text-[10px] text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-400 transition-colors cursor-pointer"
         >
           End chat
         </button>
@@ -105,7 +105,7 @@ export function ChatWindow({ sessionId, initialMessages = [], onEnd, compact = f
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5">
         {messages.length === 0 && (
-          <p className="text-xs text-slate-600 text-center mt-8">
+          <p className="text-xs text-slate-400 dark:text-slate-600 text-center mt-8">
             Ask me about your orders, returns, or any product issues.
           </p>
         )}
@@ -114,7 +114,7 @@ export function ChatWindow({ sessionId, initialMessages = [], onEnd, compact = f
             <div className={`max-w-[85%] text-xs rounded-2xl px-3 py-2 leading-relaxed ${
               m.role === "user"
                 ? "bg-indigo-500/20 text-indigo-100 border border-indigo-500/20 rounded-tr-sm"
-                : "bg-white/[0.05] text-slate-200 border border-white/[0.06] rounded-tl-sm"
+                : "bg-slate-900/[0.05] dark:bg-white/[0.05] text-slate-800 dark:text-slate-200 border border-slate-200/70 dark:border-white/[0.06] rounded-tl-sm"
             }`}>
               {m.content}
             </div>
@@ -122,7 +122,7 @@ export function ChatWindow({ sessionId, initialMessages = [], onEnd, compact = f
         ))}
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-white/[0.05] border border-white/[0.06] rounded-2xl rounded-tl-sm">
+            <div className="bg-slate-900/[0.05] dark:bg-white/[0.05] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl rounded-tl-sm">
               <TypingDots />
             </div>
           </div>
@@ -131,7 +131,7 @@ export function ChatWindow({ sessionId, initialMessages = [], onEnd, compact = f
       </div>
 
       {/* Input */}
-      <div className="shrink-0 px-3 pb-3 pt-2 border-t border-white/[0.06]">
+      <div className="shrink-0 px-3 pb-3 pt-2 border-t border-slate-200/70 dark:border-white/[0.06]">
         <div className="flex gap-2 items-end">
           <textarea
             ref={inputRef}
@@ -145,7 +145,7 @@ export function ChatWindow({ sessionId, initialMessages = [], onEnd, compact = f
             }}
             placeholder="Type a message…"
             rows={1}
-            className="flex-1 resize-none bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/40 transition-colors max-h-24 overflow-y-auto"
+            className="flex-1 resize-none bg-slate-900/[0.04] dark:bg-white/[0.04] border border-slate-200/70 dark:border-white/[0.08] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/40 transition-colors max-h-24 overflow-y-auto"
             style={{ minHeight: "36px" }}
           />
           <button
@@ -153,7 +153,7 @@ export function ChatWindow({ sessionId, initialMessages = [], onEnd, compact = f
             disabled={loading || !input.trim()}
             className="flex items-center justify-center w-8 h-8 bg-indigo-500/20 hover:bg-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed border border-indigo-500/25 rounded-xl transition-all cursor-pointer shrink-0"
           >
-            <svg className="w-3.5 h-3.5 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
             </svg>
           </button>

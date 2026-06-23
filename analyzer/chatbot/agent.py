@@ -1,16 +1,17 @@
 """Customer support chatbot agent.
 
-Graph:
-    START → agent_node → should_continue ─┬→ tools_node → agent_node (loop)
-                                           └→ END
+The chatbot runs EXCLUSIVELY on the draft 1.5B (the 7B is reserved for the analyzer).
+Because the draft server can't do LLM tool-calling, there is no ReAct loop: each turn
+resolves the relevant EDBMS data + any requested action deterministically in Python
+(see context_router.build_context), injects it as a CONTEXT block, and makes a single
+draft-model call to phrase the reply.
 
 SOC (start_conversation): authenticates customer via EDBMS, creates session.
-chat():                   routes query to draft (1.5B) or target (7B) LLM,
-                          runs one user turn with tool access.
+chat():                   builds CONTEXT (Python-side tools), one draft-model call.
 EOC (end_conversation):   stores conversation summary to Qdrant, cleans up session.
 
 Token budget (max_model_len=1024):
-  system ~70 | tools ~220 | history ≤250 | tool results ≤280 chars | response ≤170
+  system ~110 | context ≤400 chars | history ≤250 | response ≤130
 """
 
 from __future__ import annotations
@@ -18,30 +19,26 @@ from __future__ import annotations
 import os
 import time
 import uuid
-from functools import lru_cache
-from typing import Annotated, TypedDict
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from langgraph.graph import END, START, StateGraph
-from langgraph.prebuilt import ToolNode
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from .cascade_llm import get_chat_llm
+from .cascade_llm import get_draft_llm
+from .context_router import build_context
 from .memory import ConversationMemory
-from .tools import _CURRENT_CUSTOMER, TOOLS, reset_tool_budget
 
-# Cap on agent_node↔tools loop iterations per turn. LangGraph counts each node hop,
-# so N covers roughly N/2 tool rounds — enough for a multi-tool answer, but it stops
-# a model that loops forever calling tools. Configurable via env.
+# Retained for config/back-compat (and asserted by tests). The draft-only chatbot
+# makes a single model call per turn, so there is no tool-loop to bound, but keeping
+# the knob avoids breaking deployments that set CHATBOT_RECURSION_LIMIT.
 _RECURSION_LIMIT = int(os.getenv("CHATBOT_RECURSION_LIMIT", "8"))
 
 _SYSTEM = (
-    "You are a helpful, empathetic customer support assistant. "
-    "You have access to the customer's purchase history and account details via tools. "
-    "When a customer mentions a product issue, call lookup_purchase_context with keywords first. "
-    "For general questions use get_faq_answer. For anything you can't find, try web_search. "
-    "Never guess order details — always call a tool first. "
-    "When you cannot resolve an issue, call escalate_to_human. "
-    "Be concise and friendly. Keep responses under 3 sentences."
+    "You are a friendly, empathetic customer support assistant. "
+    "A CONTEXT section may give the customer's relevant orders, an FAQ answer, and any "
+    "actions already completed on their behalf. Use ONLY the CONTEXT for order/account "
+    "facts — never invent order numbers, prices, or statuses. "
+    "If the CONTEXT shows an action was done (refund, complaint, escalation), confirm it warmly. "
+    "If the needed info isn't in the CONTEXT, say you'll look into it and offer a human agent. "
+    "Keep responses under 3 sentences."
 )
 
 _INITIAL_QUICK_REPLIES = [
@@ -51,50 +48,6 @@ _INITIAL_QUICK_REPLIES = [
     "Track my delivery",
     "Account information",
 ]
-
-
-# ── LangGraph state ────────────────────────────────────────────────────────────
-
-
-def _merge_messages(a: list, b: list) -> list:
-    return a + b
-
-
-class AgentState(TypedDict):
-    messages: Annotated[list[BaseMessage], _merge_messages]
-
-
-# ── Graph ──────────────────────────────────────────────────────────────────────
-
-
-@lru_cache(maxsize=1)
-def _get_graph():
-    """Build the ReAct graph once. LLM is selected dynamically inside agent_node."""
-    tool_node = ToolNode(TOOLS)
-
-    def agent_node(state: AgentState) -> dict:
-        # Find last human message to classify query complexity for model routing
-        last_user = ""
-        for msg in reversed(state["messages"]):
-            if isinstance(msg, HumanMessage):
-                last_user = str(msg.content)
-                break
-        llm = get_chat_llm(last_user, temperature=0.3).bind_tools(TOOLS).bind(max_tokens=170)
-        return {"messages": [llm.invoke(state["messages"])]}
-
-    def should_continue(state: AgentState) -> str:
-        last = state["messages"][-1]
-        if hasattr(last, "tool_calls") and last.tool_calls:
-            return "tools"
-        return END
-
-    g = StateGraph(AgentState)
-    g.add_node("agent", agent_node)
-    g.add_node("tools", tool_node)
-    g.add_edge(START, "agent")
-    g.add_conditional_edges("agent", should_continue, {"tools": "tools", END: END})
-    g.add_edge("tools", "agent")
-    return g.compile()
 
 
 # ── Session store ──────────────────────────────────────────────────────────────
@@ -160,7 +113,11 @@ def get_quick_replies(session_id: str) -> list[str]:
 
 
 def chat(session_id: str, user_message: str) -> str:
-    """Process one user turn. Sets _CURRENT_CUSTOMER for the duration of the call."""
+    """Process one user turn on the draft model.
+
+    Pipeline: resolve EDBMS context + actions in Python → build a single prompt
+    (one merged system message + history) → one draft-model call. No tool-calling.
+    """
     if session_id not in _sessions:
         session_id = start_conversation()
 
@@ -169,34 +126,31 @@ def chat(session_id: str, user_message: str) -> str:
     customer: dict = session.get("customer", {})
     session["ts"] = time.time()
 
-    token = _CURRENT_CUSTOMER.set(customer)
-    reset_tool_budget()  # fresh per-turn tool-call budget (caps web_search etc.)
+    memory.add("user", user_message)
+
+    # Python-side "tools": fetch this customer's relevant data / perform actions.
+    context = build_context(user_message, customer)
+
+    # One merged system message — the draft's minimal chat template is happier with a
+    # single system block than several. Carries the account/earlier summary + CONTEXT.
+    sys_parts = [_SYSTEM]
+    if memory.summary:
+        sys_parts.append("ACCOUNT/EARLIER: " + memory.summary)
+    if context:
+        sys_parts.append("CONTEXT: " + context)
+
+    messages = [SystemMessage(content="\n".join(sys_parts))]
+    for m in memory.messages:  # already includes the just-added user turn
+        messages.append(HumanMessage(content=m.content) if m.role == "user" else AIMessage(content=m.content))
+
     try:
-        memory.add("user", user_message)
-        messages: list[BaseMessage] = [SystemMessage(content=_SYSTEM)]
-        messages += memory.to_langchain_messages()
+        llm = get_draft_llm(temperature=0.3).bind(max_tokens=130)
+        reply = str(llm.invoke(messages).content).strip() or "I'm sorry, I couldn't process that. Please try again."
+    except Exception:
+        reply = "I'm having trouble reaching the assistant right now. Let me connect you with a human agent who can help."
 
-        # recursion_limit bounds the agent↔tools loop; on overrun LangGraph raises
-        # GraphRecursionError, which we turn into a graceful escalation message.
-        try:
-            result = _get_graph().invoke(
-                {"messages": messages},
-                config={"recursion_limit": _RECURSION_LIMIT},
-            )
-            reply = "I'm sorry, I couldn't process that. Please try again."
-            for msg in reversed(result["messages"]):
-                if isinstance(msg, AIMessage) and not getattr(msg, "tool_calls", None):
-                    reply = str(msg.content) or reply
-                    break
-        except Exception:
-            reply = (
-                "I'm having trouble resolving this automatically. Let me connect you with a human agent who can help."
-            )
-
-        memory.add("assistant", reply)
-        return reply
-    finally:
-        _CURRENT_CUSTOMER.reset(token)
+    memory.add("assistant", reply)
+    return reply
 
 
 # ── EOC ────────────────────────────────────────────────────────────────────────

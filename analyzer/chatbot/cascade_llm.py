@@ -70,6 +70,18 @@ def _draft_llm(temperature: float) -> ChatOpenAI:
     )
 
 
+def get_draft_llm(temperature: float = 0.3) -> ChatOpenAI:
+    """The chatbot runs exclusively on the draft 1.5B — no 7B fallback.
+
+    If DRAFT_LLM_URL is unset we raise rather than silently spilling chatbot load
+    onto the analyzer's 7B (the whole point of the split). The caller turns the
+    error into a graceful 'connect you to a human' reply.
+    """
+    if not DRAFT_LLM_URL:
+        raise RuntimeError("DRAFT_LLM_URL is not set; the chatbot requires the draft model.")
+    return _draft_llm(temperature)
+
+
 def get_chat_llm(query: str, temperature: float = 0.3) -> ChatOpenAI:
     """Return the appropriate LLM for the given query.
 

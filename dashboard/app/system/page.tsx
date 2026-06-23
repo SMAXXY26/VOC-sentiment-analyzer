@@ -7,7 +7,7 @@ function StatCard({ label, value, accent = false }: { label: string; value: stri
   return (
     <div className="glass rounded-2xl p-4 glass-hover">
       <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-2">{label}</p>
-      <p className={`text-xl font-bold tabular-nums ${accent ? "text-indigo-300" : "text-slate-200"}`}>{value}</p>
+      <p className={`text-xl font-bold tabular-nums ${accent ? "text-indigo-600 dark:text-indigo-300" : "text-slate-800 dark:text-slate-200"}`}>{value}</p>
     </div>
   );
 }
@@ -20,7 +20,7 @@ export default function SystemPage() {
       {/* Header */}
       <div className="flex items-center justify-between py-2">
         <div>
-          <h1 className="text-lg font-semibold text-white tracking-tight">System Health</h1>
+          <h1 className="text-lg font-semibold text-slate-900 dark:text-white tracking-tight">System Health</h1>
           <p className="text-xs text-slate-500 mt-0.5">Hardware utilization · refreshes every 3s</p>
         </div>
         <div className="flex items-center gap-2 glass rounded-xl px-3 py-1.5">
@@ -28,12 +28,12 @@ export default function SystemPage() {
             <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-60 ${error ? "bg-red-400" : "bg-emerald-400"}`} />
             <span className={`relative inline-flex rounded-full h-2 w-2 ${error ? "bg-red-400" : "bg-emerald-400"}`} />
           </span>
-          <span className="text-xs text-slate-400">{error ? "API unreachable" : "Connected"}</span>
+          <span className="text-xs text-slate-600 dark:text-slate-400">{error ? "API unreachable" : "Connected"}</span>
         </div>
       </div>
 
       {error && (
-        <div className="glass rounded-2xl p-4 border-l-2 border-red-500/40 text-red-300 text-sm animate-fade-in">
+        <div className="glass rounded-2xl p-4 border-l-2 border-red-500/40 text-red-600 dark:text-red-300 text-sm animate-fade-in">
           Cannot reach API — make sure the FastAPI server is running on port 8080.
         </div>
       )}
@@ -68,8 +68,8 @@ export default function SystemPage() {
                 { label: "GPU Utilization", value: data.gpu_util_percent != null ? `${data.gpu_util_percent}%` : "N/A", high: (data.gpu_util_percent ?? 0) > 85 },
               ].map((s) => (
                 <div key={s.label} className="text-center">
-                  <p className={`text-2xl font-bold tabular-nums ${s.high ? "text-red-300" : "text-slate-200"}`}>{s.value}</p>
-                  <p className="text-[11px] text-slate-600 mt-1">{s.label}</p>
+                  <p className={`text-2xl font-bold tabular-nums ${s.high ? "text-red-600 dark:text-red-300" : "text-slate-800 dark:text-slate-200"}`}>{s.value}</p>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-600 mt-1">{s.label}</p>
                 </div>
               ))}
             </div>

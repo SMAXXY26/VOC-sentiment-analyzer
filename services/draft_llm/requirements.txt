@@ -1,4 +1,5 @@
-sentence-transformers==3.3.1
+autoawq==0.2.8
 transformers==4.46.3
 fastapi==0.115.6
 uvicorn[standard]==0.32.1
+torch>=2.1.0

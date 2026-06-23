@@ -38,16 +38,49 @@ class TaxonomyClassification(BaseModel):
 
 class SentimentEmotion(BaseModel):
     sentiment: str = Field(description="positive, negative, or neutral")
-    emotions: list[str] = Field(description="Detected emotions e.g. frustrated, happy, confused")
+    # max_length caps the worst-case serialized size: under the merged single-call
+    # schema, unbounded lists are what let the AWQ model ramble and blow the
+    # max_tokens cap (truncated JSON → .parse() failure). Report only the strongest.
+    emotions: list[str] = Field(
+        description="Up to 6 specific emotions actually expressed (strongest first)", max_length=6
+    )
     intensity: int = Field(description="Emotional intensity from 1 (mild) to 10 (extreme)", ge=1, le=10)
 
 
 class BusinessSignals(BaseModel):
     churn_risk: bool = Field(description="True if customer shows signs of leaving")
     upsell_opportunity: bool = Field(description="True if customer is open to more services")
-    feature_requests: list[str] = Field(description="Specific features the customer requested")
-    bug_reports: list[str] = Field(description="Bugs or broken functionality mentioned")
-    competitor_mentions: list[str] = Field(description="Any competitors named")
+    # Lists hard-capped so the combined-classification JSON stays bounded (see SentimentEmotion).
+    feature_requests: list[str] = Field(
+        description="Up to 6 specific features the customer requested", max_length=6
+    )
+    bug_reports: list[str] = Field(
+        description="Up to 6 bugs or broken functionality mentioned", max_length=6
+    )
+    competitor_mentions: list[str] = Field(
+        description="Up to 5 competitors named", max_length=5
+    )
+
+
+class CombinedClassification(BaseModel):
+    """Single LLM call that replaces the taxonomy + sentiment + business_signals trio.
+
+    The merged stage re-splits this into ctx["taxonomy"/"sentiment"/"signals"], so every
+    downstream stage and the FeedbackAnalysis assembly keep their existing contract — only
+    the *call count* drops from 3 to 1. Nesting (not flattening) is deliberate: it reuses
+    the exact field-level constraints and descriptions the separate stages already proved
+    out, so the guided-decoding grammar is identical per sub-object.
+
+    VRAM / JSON-truncation budget (8GB AWQ 7B, target --max-model-len 2048):
+      input prompt   ~600-900 tok (3 instruction blocks + feedback + topics + history)
+      output JSON    ~250-500 tok worst case, bounded by the max_length caps on every list
+    Comfortably inside the max_tokens=1024 generation cap, so the object can always close
+    before hitting finish_reason="length".
+    """
+
+    taxonomy: TaxonomyClassification
+    sentiment: SentimentEmotion
+    signals: BusinessSignals
 
 
 class RiskLevel(str, Enum):

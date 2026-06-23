@@ -33,17 +33,19 @@ def test_get_llm_small_falls_back_to_big_without_draft_url():
     assert "7B" in L.get_llm(model="small").model_name
 
 
-def test_get_llm_small_routes_to_draft_when_configured():
+def test_get_llm_stays_on_7b_even_when_draft_configured():
+    """The analyzer is pinned to the 7B; the draft 1.5B is reserved for the chatbot.
+    Even with DRAFT_LLM_URL set and a "small" target, get_llm must NOT route to the
+    draft — analysis never spills onto the chatbot's model."""
     os.environ["DRAFT_LLM_URL"] = "http://localhost:8001"
     import analyzer.llm as L
 
     importlib.reload(L)
     try:
-        assert "1.5B" in L.get_llm(model="small").model_name
-        # The per-request ContextVar should drive selection too.
+        assert "7B" in L.get_llm(model="small").model_name
         tok = L.set_target_model("small")
         try:
-            assert "1.5B" in L.get_llm().model_name
+            assert "7B" in L.get_llm().model_name
         finally:
             L.reset_target_model(tok)
         assert "7B" in L.get_llm().model_name
