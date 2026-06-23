@@ -1,0 +1,16 @@
+# Dependencies and build output are reinstalled/regenerated inside the image.
+# The Dockerfile does `COPY . .`, so excluding these also prevents host copies
+# from clobbering the clean install.
+node_modules
+**/node_modules
+.next
+**/.next
+
+# Git / env / misc
+.git
+.env*.local
+*.log
+npm-debug.log*
+.DS_Store
+Dockerfile
+.dockerignore

@@ -34,6 +34,7 @@ def _store(ctx: dict) -> dict:
     )
     raw_text = ctx["normalized"].original
     source = ctx.get("source", "unknown")
+    stored_at = ctx.get("stored_at")  # backdated by bulk loaders; None → store_analysis uses now
 
     try:
         from vectordb.store import store_analysis
@@ -43,6 +44,7 @@ def _store(ctx: dict) -> dict:
             raw_text=raw_text,
             analysis=analysis,
             source=source,
+            stored_at=stored_at,
         )
         # Qdrant is reachable — opportunistically drain any local fallback buffer.
         try:

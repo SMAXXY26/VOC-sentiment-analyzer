@@ -1,7 +1,6 @@
 import "./globals.css";
 import { Inter } from "next/font/google";
-import { Nav } from "@/components/Nav";
-import { ChatWidget } from "@/components/ChatWidget";
+import { AuthGate } from "@/components/AuthGate";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -20,11 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="bg-slate-50 text-slate-900 dark:bg-[#060b18] dark:text-slate-100 min-h-screen md:h-screen md:overflow-hidden transition-colors duration-300">
         <ThemeProvider>
-          <div className="flex flex-col md:flex-row min-h-screen md:h-screen">
-            <Nav />
-            <main className="flex-1 min-w-0 md:h-screen overflow-y-auto px-4 py-4">{children}</main>
-          </div>
-          <ChatWidget />
+          <AuthGate>{children}</AuthGate>
         </ThemeProvider>
       </body>
     </html>

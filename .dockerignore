@@ -1,10 +1,39 @@
+# Secrets / git
 .env
+.git
+
+# Python caches
 __pycache__
+**/__pycache__
 *.pyc
 *.pyo
-.git
-node_modules
-.next
 *.egg-info
+
+# Node / Next.js (patterns are not recursive — match nested copies explicitly)
+node_modules
+**/node_modules
+.next
+**/.next
+
+# Rust build artifacts
+target
+**/target
+
+# Hugging Face model cache (multi-GB downloaded models — never needed in a build)
+.hf_cache
+**/.hf_cache
+
+# Training outputs (checkpoints, merged/quantized models)
+training/checkpoints
+training/merged
+training/quantized
+
+# Misc local artifacts
 build.log
 Miniforge3*.sh
+results*.json
+*.log
+.pytest_cache
+**/.pytest_cache
+.venv
+venv

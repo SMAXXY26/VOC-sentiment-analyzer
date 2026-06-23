@@ -23,6 +23,7 @@ def store_analysis(
     raw_text: str,
     analysis: "FeedbackAnalysis",  # type: ignore[name-defined]
     source: str = "unknown",
+    stored_at: Optional[float] = None,
 ) -> None:
     try:
         client = get_client()
@@ -32,8 +33,9 @@ def store_analysis(
             "feedback_id": feedback_id,
             "source": source,
             # Unix epoch seconds — used by the dashboard's date-wise volume chart and
-            # by time-window queries (drift / retrieval). Only set going forward.
-            "stored_at": time.time(),
+            # by time-window queries (drift / retrieval). Defaults to now; bulk loaders
+            # may pass a backdated value to spread data across a time range.
+            "stored_at": stored_at if stored_at is not None else time.time(),
             "summary": summary,
             "raw_text": raw_text[:500],  # truncate to avoid large payloads
             "category": analysis.taxonomy.category,

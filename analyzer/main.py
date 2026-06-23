@@ -18,6 +18,7 @@ def analyze_single(
     feedback_id: str | None = None,
     model: str | None = None,
     source: str | None = None,
+    stored_at: float | None = None,
 ) -> FeedbackAnalysis:
     import time
 
@@ -73,6 +74,9 @@ def analyze_single(
     invoke_input = {"raw_text": raw_text, "feedback_id": fid}
     if source is not None:
         invoke_input["source"] = source
+    # Optional backdated timestamp (bulk loaders spread data across a time range).
+    if stored_at is not None:
+        invoke_input["stored_at"] = stored_at
     try:
         ctx = pipeline.invoke(invoke_input)
     finally:

@@ -17,7 +17,11 @@ _API_KEY = os.getenv("API_KEY", "")
 _allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
 _cors_origins = [o.strip() for o in _allowed_origins_env.split(",") if o.strip()] or ["*"]
 
-_EXEMPT_PATHS = {"/health", "/ready"}
+# Auth is enforced when a service API key is configured, or AUTH_REQUIRED is set
+# (so dashboard-token-only deployments can require login without a shared key).
+_AUTH_ENABLED = bool(_API_KEY) or os.getenv("AUTH_REQUIRED", "").lower() in ("1", "true", "yes")
+
+_EXEMPT_PATHS = {"/health", "/ready", "/auth/login"}
 
 # Common English stopwords + filler terms, excluded from the dashboard word cloud
 # so it surfaces meaningful feedback vocabulary rather than "the", "and", etc.
@@ -38,9 +42,23 @@ def _tokenize_words(text: str) -> list[str]:
     return [w for w in (m.group(0).lower() for m in _WORD_RE.finditer(text)) if w not in _STOPWORDS]
 
 
-async def _require_api_key(request: Request, x_api_key: str = Header(default="")):
-    if _API_KEY and request.url.path not in _EXEMPT_PATHS and x_api_key != _API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid API key")
+async def _require_api_key(
+    request: Request,
+    x_api_key: str = Header(default=""),
+    authorization: str = Header(default=""),
+):
+    """Allow the request if auth is disabled, the path is exempt, the static service
+    key matches, OR a valid dashboard bearer token is presented."""
+    if not _AUTH_ENABLED or request.url.path in _EXEMPT_PATHS:
+        return
+    if _API_KEY and x_api_key == _API_KEY:
+        return
+    if authorization.startswith("Bearer "):
+        from .auth import verify_token
+
+        if verify_token(authorization[7:]):
+            return
+    raise HTTPException(status_code=401, detail="Authentication required")
 
 
 @asynccontextmanager
@@ -84,6 +102,36 @@ def metrics():
     from fastapi import Response
 
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+# ── Dashboard auth ───────────────────────────────────────────────────────────────
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/auth/login")
+async def auth_login(req: LoginRequest):
+    """Verify operator credentials (SQLite) and issue a signed bearer token."""
+    from .auth import issue_token, verify_credentials
+
+    user = await asyncio.to_thread(verify_credentials, req.username, req.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    return {**issue_token(user["username"]), "role": user["role"]}
+
+
+@app.get("/auth/me")
+async def auth_me(authorization: str = Header(default="")):
+    """Validate the current bearer token (used by the dashboard to check its session)."""
+    from .auth import verify_token
+
+    username = verify_token(authorization[7:]) if authorization.startswith("Bearer ") else None
+    if not username:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return {"username": username}
 
 
 class AnalyzeRequest(BaseModel):
@@ -178,22 +226,64 @@ def _by_priority(items: list[dict]) -> list[dict]:
     return sorted(items, key=_priority_key, reverse=True)
 
 
+def _analyses_filter(
+    category: Optional[str] = None,
+    sentiment: Optional[str] = None,
+    risk_level: Optional[str] = None,
+    escalate: Optional[bool] = None,
+    churn_risk: Optional[bool] = None,
+):
+    """Build a Qdrant filter combining the search-bar payload filters (AND) with the
+    seed-exclusion rule. Returns None when nothing needs filtering."""
+    from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+    must = []
+    if category:
+        must.append(FieldCondition(key="category", match=MatchValue(value=category)))
+    if sentiment:
+        must.append(FieldCondition(key="sentiment", match=MatchValue(value=sentiment)))
+    if risk_level:
+        must.append(FieldCondition(key="risk_level", match=MatchValue(value=risk_level)))
+    if escalate is not None:
+        must.append(FieldCondition(key="escalate", match=MatchValue(value=escalate)))
+    if churn_risk is not None:
+        must.append(FieldCondition(key="churn_risk", match=MatchValue(value=churn_risk)))
+
+    must_not = []
+    if SEED_SOURCE:
+        must_not.append(FieldCondition(key="source", match=MatchValue(value=SEED_SOURCE)))
+
+    if not must and not must_not:
+        return None
+    return Filter(must=must or None, must_not=must_not or None)
+
+
 @app.get("/analyses")
-def list_analyses(limit: int = 50, offset: int = 0, q: Optional[str] = None):
+def list_analyses(
+    limit: int = 50,
+    offset: int = 0,
+    q: Optional[str] = None,
+    category: Optional[str] = None,
+    sentiment: Optional[str] = None,
+    risk_level: Optional[str] = None,
+    escalate: Optional[bool] = None,
+    churn_risk: Optional[bool] = None,
+):
     try:
         from vectordb.client import ANALYSES_COLLECTION, get_client
         from vectordb.store import search
 
+        qfilter = _analyses_filter(category, sentiment, risk_level, escalate, churn_risk)
+
         if q and q.strip():
-            # Exclude seed items server-side so they don't consume the top-k slots
-            # (filtering after the search left real results starved → empty list).
-            results = search(q.strip(), k=limit, query_filter=_exclude_seed_filter())
-            results = _by_priority(results)
-            return {"items": results, "total": len(results)}
+            # Filters (incl. seed-exclusion) applied server-side so they don't consume
+            # the top-k slots (filtering after the search left real results starved).
+            results = search(q.strip(), k=limit, query_filter=qfilter)
+            return {"items": _by_priority(results), "total": len(results)}
         client = get_client()
         points, _ = client.scroll(
             collection_name=ANALYSES_COLLECTION,
-            scroll_filter=_exclude_seed_filter(),
+            scroll_filter=qfilter,
             limit=limit,
             offset=offset,
             with_payload=True,

@@ -1,0 +1,10 @@
+# Rust build artifacts — rebuilt inside the image (2.5G+ otherwise shipped as context).
+target
+**/target
+
+# Git / misc
+.git
+*.log
+.DS_Store
+Dockerfile
+.dockerignore

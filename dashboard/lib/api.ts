@@ -62,27 +62,62 @@ export interface SystemStats {
   gpu_util_percent: number | null;
 }
 
+import { authHeaders, clearToken } from "./auth";
+
 const BASE = "/api";
 
-export async function fetchAnalyses(limit = 50, q?: string): Promise<{ items: AnalysisItem[]; total: number }> {
+// Wraps fetch: attaches the bearer token and, on 401, clears the session and
+// bounces to the login page.
+async function authFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const res = await fetch(input, {
+    ...init,
+    headers: { ...(init.headers as Record<string, string> | undefined), ...authHeaders() },
+  });
+  if (res.status === 401 && typeof window !== "undefined") {
+    clearToken();
+    if (!window.location.pathname.startsWith("/login")) {
+      window.location.href = "/login";
+    }
+  }
+  return res;
+}
+
+export interface SearchFilters {
+  category?: string;
+  sentiment?: string;
+  risk_level?: string;
+  escalate?: boolean;
+  churn_risk?: boolean;
+}
+
+export async function fetchAnalyses(
+  limit = 50,
+  q?: string,
+  filters?: SearchFilters,
+): Promise<{ items: AnalysisItem[]; total: number }> {
   const params = new URLSearchParams({ limit: String(limit) });
   if (q) params.set("q", q);
-  const res = await fetch(`${BASE}/analyses?${params}`);
+  if (filters) {
+    for (const [k, v] of Object.entries(filters)) {
+      if (v !== undefined && v !== "" && v !== false) params.set(k, String(v));
+    }
+  }
+  const res = await authFetch(`${BASE}/analyses?${params}`);
   return res.json();
 }
 
 export async function fetchSummary(): Promise<AnalysesSummary> {
-  const res = await fetch(`${BASE}/analyses/summary`);
+  const res = await authFetch(`${BASE}/analyses/summary`);
   return res.json();
 }
 
 export async function fetchSystem(): Promise<SystemStats> {
-  const res = await fetch(`${BASE}/system`);
+  const res = await authFetch(`${BASE}/system`);
   return res.json();
 }
 
 export async function analyzeText(text: string): Promise<FeedbackAnalysis> {
-  const res = await fetch(`${BASE}/analyze`, {
+  const res = await authFetch(`${BASE}/analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
@@ -112,7 +147,7 @@ export async function startChat(
   password?: string,
   message?: string,
 ): Promise<ChatResponse> {
-  const res = await fetch(`${BASE}/chat`, {
+  const res = await authFetch(`${BASE}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ customer_id, password, message }),
@@ -129,7 +164,7 @@ export async function sendMessage(
   session_id: string,
   message: string,
 ): Promise<ChatResponse> {
-  const res = await fetch(`${BASE}/chat/${session_id}`, {
+  const res = await authFetch(`${BASE}/chat/${session_id}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message }),
@@ -140,5 +175,5 @@ export async function sendMessage(
 }
 
 export async function endChat(session_id: string): Promise<void> {
-  await fetch(`${BASE}/chat/${session_id}`, { method: "DELETE", cache: "no-store" });
+  await authFetch(`${BASE}/chat/${session_id}`, { method: "DELETE", cache: "no-store" });
 }

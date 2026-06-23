@@ -40,6 +40,13 @@ def main():
     p.add_argument("--limit", type=int, default=200, help="max rows to ingest (keeps GPU time bounded)")
     p.add_argument("--semantic-schedule", action="store_true", help="reorder by similarity for prefix-cache reuse")
     p.add_argument(
+        "--spread-days",
+        type=int,
+        default=0,
+        help="distribute each item's stored_at uniformly over the last N days (0 = now). "
+        "Use e.g. 365 to backfill a year of dates so the dashboard time charts span a range.",
+    )
+    p.add_argument(
         "--seed-source",
         default="hf_seed",
         help="payload 'source' marker; the dashboard hides this value while "
@@ -64,12 +71,21 @@ def main():
         records = schedule(records, key=lambda r: r.text)
         console.print("[cyan]Reordered by semantic similarity (prefix-cache friendly)[/cyan]")
 
+    import random
+    import time
+
+    now = time.time()
+    spread_secs = max(0, args.spread_days) * 86400
+
     stored = 0
     for rec in track(records, description="Analyzing → Qdrant..."):
         try:
+            # Backdate each item to a random point in the last --spread-days so the
+            # dashboard's day/week/month volume chart spans a real range (0 = now).
+            backdated = now - random.uniform(0, spread_secs) if spread_secs else None
             # Tagged with seed_source so the dashboard excludes it (store_result persists
             # source into the feedback_analyses payload).
-            analyze_single(rec.text, source=seed_source)
+            analyze_single(rec.text, source=seed_source, stored_at=backdated)
             stored += 1
         except Exception as exc:
             console.print(f"[yellow]skip: {str(exc)[:80]}[/yellow]")
