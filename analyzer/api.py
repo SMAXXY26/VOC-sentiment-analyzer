@@ -22,13 +22,15 @@ _EXEMPT_PATHS = {"/health", "/ready"}
 # Common English stopwords + filler terms, excluded from the dashboard word cloud
 # so it surfaces meaningful feedback vocabulary rather than "the", "and", etc.
 _WORD_RE = re.compile(r"[A-Za-z][A-Za-z'-]{2,}")
-_STOPWORDS = frozenset("""
+_STOPWORDS = frozenset(
+    """
 a an and the of to in is it for on with this that was were be been being have has had
 do does did but or if so as at by from we you they he she them his her our your my me
 i not no yes can will just get got would could should there here what when which who how
 am are isnt arent dont doesnt didnt im ive id ill us about into out up down over under
 than then too very really also more most some any all only even much many lot really
-""".split())
+""".split()
+)
 
 
 def _tokenize_words(text: str) -> list[str]:

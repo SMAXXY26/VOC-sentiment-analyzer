@@ -147,7 +147,9 @@ def chat(session_id: str, user_message: str) -> str:
         llm = get_draft_llm(temperature=0.3).bind(max_tokens=130)
         reply = str(llm.invoke(messages).content).strip() or "I'm sorry, I couldn't process that. Please try again."
     except Exception:
-        reply = "I'm having trouble reaching the assistant right now. Let me connect you with a human agent who can help."
+        reply = (
+            "I'm having trouble reaching the assistant right now. Let me connect you with a human agent who can help."
+        )
 
     memory.add("assistant", reply)
     return reply

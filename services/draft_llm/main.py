@@ -9,7 +9,6 @@ from __future__ import annotations
 import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import Optional
 
 import torch
 from fastapi import FastAPI
@@ -41,6 +40,7 @@ app = FastAPI(lifespan=lifespan)
 
 
 # ── OpenAI-compatible types (subset) ──────────────────────────────────────────
+
 
 class Message(BaseModel):
     role: str
@@ -77,6 +77,7 @@ class ChatCompletionResponse(BaseModel):
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @app.get("/health")
 def health():

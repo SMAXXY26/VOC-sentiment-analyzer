@@ -183,8 +183,14 @@ class TestFullPipelineMocked:
         ctx["executive"] = _mock_llm_output(ExecutiveIntelligence)
         ctx["experience"] = ExperienceScores(
             csi=CustomerSatisfactionIndex(
-                product_quality=3, delivery=3, commercial_process=2, marketing_performance=3,
-                complaint_handling=1, company_personnel=2, technical_support=1, relation_building=2,
+                product_quality=3,
+                delivery=3,
+                commercial_process=2,
+                marketing_performance=3,
+                complaint_handling=1,
+                company_personnel=2,
+                technical_support=1,
+                relation_building=2,
             ),
             cxi=CustomerExperienceIndex(satisfaction=2, loyalty=1, advocacy=1, value_for_money=2),
             csi_percent=43.8,

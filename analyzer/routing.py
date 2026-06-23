@@ -32,7 +32,9 @@ _ROUTER_SYSTEM = (
 def _route_with_model(text: str) -> str | None:
     """Classify with the 1.5B draft model. Returns 'big'/'small', or None if the draft
     model isn't configured or the call fails (caller then falls back to keywords)."""
-    from .llm import _DRAFT_URL, _draft_llm, reset_target_model, set_target_model
+    from .chatbot.cascade_llm import DRAFT_LLM_URL as _DRAFT_URL
+    from .chatbot.cascade_llm import _draft_llm
+    from .llm import reset_target_model, set_target_model
 
     if not _DRAFT_URL:
         return None

@@ -53,6 +53,7 @@ CATEGORIES = ("Billing", "Product", "Support", "Shipping", "Account", "Onboardin
 
 class Decision(BaseModel):
     """Tiny schema: always closes inside the 1024-token budget."""
+
     category: Literal["Billing", "Product", "Support", "Shipping", "Account", "Onboarding", "Other"]
     sentiment: Literal["positive", "negative", "neutral"]
     escalate: bool
@@ -67,14 +68,12 @@ DECISION_SYS = "You are a CX analyst. Classify the customer feedback."
 # The prompt baked into each DPO record. Mirrors DECISION_SYS so the trained behaviour
 # matches what we measured.
 PROMPT_TMPL = (
-    "<|im_start|>system\n" + DECISION_SYS + "<|im_end|>\n"
-    "<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n"
+    "<|im_start|>system\n" + DECISION_SYS + "<|im_end|>\n<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n"
 )
 
 
 def _decision_json(category: str, sentiment: str, escalate: bool) -> str:
-    return json.dumps({"category": category, "sentiment": sentiment, "escalate": escalate},
-                      separators=(",", ":"))
+    return json.dumps({"category": category, "sentiment": sentiment, "escalate": escalate}, separators=(",", ":"))
 
 
 def main():
@@ -83,8 +82,12 @@ def main():
     p.add_argument("--eval-file", default="eval/data/cx_eval.jsonl")
     p.add_argument("--out", default="training/data/dpo_observed.jsonl")
     p.add_argument("--append", action="store_true")
-    p.add_argument("--samples", type=int, default=0,
-                   help="extra samples per item at --temp to measure decision ambiguity (0 = skip)")
+    p.add_argument(
+        "--samples",
+        type=int,
+        default=0,
+        help="extra samples per item at --temp to measure decision ambiguity (0 = skip)",
+    )
     p.add_argument("--temp", type=float, default=0.7)
     args = p.parse_args()
 
@@ -98,15 +101,24 @@ def main():
     try:
         from training._report import banner, step, summary, warn
     except Exception:
-        def banner(t, s=""): print(f"== {t} == {s}")
-        def step(m): print(f" - {m}")
-        def warn(m): print(f" ! {m}")
-        def summary(t, **k): print(t, k)
+
+        def banner(t, s=""):
+            print(f"== {t} == {s}")
+
+        def step(m):
+            print(f" - {m}")
+
+        def warn(m):
+            print(f" ! {m}")
+
+        def summary(t, **k):
+            print(t, k)
 
     banner("Observed DPO mining", f"decision schema · {args.url}")
 
     # Fail fast if the endpoint is down — we never fabricate observations.
     import urllib.request
+
     health = args.url.rsplit("/v1", 1)[0] + "/health"
     try:
         urllib.request.urlopen(health, timeout=4)
@@ -125,8 +137,9 @@ def main():
     # path, which needs --enable-auto-tool-choice/--tool-call-parser and otherwise emits
     # <tool_call> garbage on this server).
     greedy = get_llm(temperature=0.0).with_structured_output(Decision, method="json_schema")
-    sampler = (get_llm(temperature=args.temp).with_structured_output(Decision, method="json_schema")
-               if args.samples else None)
+    sampler = (
+        get_llm(temperature=args.temp).with_structured_output(Decision, method="json_schema") if args.samples else None
+    )
 
     def classify(model, text, retries: int = 3) -> Decision | None:
         # Retry the occasional LengthFinishReasonError: greedy decode on this AWQ build is
@@ -165,11 +178,13 @@ def main():
             diverged_dims["escalate"] += 1
 
         if diverged:
-            pairs.append({
-                "prompt": PROMPT_TMPL.format(text=item["text"]),
-                "chosen": _decision_json(item["category"], item["sentiment"], bool(item["escalate"])),
-                "rejected": _decision_json(d.category, d.sentiment, bool(d.escalate)),
-            })
+            pairs.append(
+                {
+                    "prompt": PROMPT_TMPL.format(text=item["text"]),
+                    "chosen": _decision_json(item["category"], item["sentiment"], bool(item["escalate"])),
+                    "rejected": _decision_json(d.category, d.sentiment, bool(d.escalate)),
+                }
+            )
             step(f"[ERROR {', '.join(diverged)}] {item['text'][:48]}")
         else:
             step(f"[ok] {item['text'][:55]} ({latency:.0f}ms)")
@@ -203,7 +218,9 @@ def main():
     if ambiguity_rows:
         ambiguity_rows.sort(reverse=True)
         unstable = [r for r in ambiguity_rows if r[0] > 0]
-        step(f"Ambiguity: {len(unstable)}/{len(ambiguity_rows)} items had an unstable decision across {args.samples} samples")
+        step(
+            f"Ambiguity: {len(unstable)}/{len(ambiguity_rows)} items had an unstable decision across {args.samples} samples"
+        )
         for flip, uniq, text in ambiguity_rows[:10]:
             tag = "UNSTABLE" if flip > 0 else "stable  "
             step(f"  [{tag}] flip_rate={flip} distinct={uniq}  {text}")

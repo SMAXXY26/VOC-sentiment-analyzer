@@ -38,15 +38,17 @@ def main():
     tok = AutoTokenizer.from_pretrained(args.model)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model, torch_dtype=torch.bfloat16, device_map="cuda"
-    )
+    model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.bfloat16, device_map="cuda")
 
     ds = load_dataset("json", data_files=data_path, split="train")
     print(f"[dpo-smoke] {len(ds)} preference pairs from {args.data}")
 
     lora = LoraConfig(
-        r=16, lora_alpha=32, lora_dropout=0.05, bias="none", task_type="CAUSAL_LM",
+        r=16,
+        lora_alpha=32,
+        lora_dropout=0.05,
+        bias="none",
+        task_type="CAUSAL_LM",
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
     )
 
@@ -70,7 +72,7 @@ def main():
 
     trainer = DPOTrainer(
         model=model,
-        ref_model=None,           # peft adapter → base weights serve as the frozen reference
+        ref_model=None,  # peft adapter → base weights serve as the frozen reference
         args=cfg,
         train_dataset=ds,
         processing_class=tok,

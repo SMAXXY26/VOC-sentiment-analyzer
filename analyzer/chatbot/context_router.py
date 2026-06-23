@@ -19,16 +19,53 @@ from .tools import _FAQ
 
 # Keyword sets for routing. Kept small and lowercase; matched against the message.
 _ORDER_KW = {
-    "order", "orders", "delivery", "deliver", "delivered", "track", "tracking",
-    "status", "package", "parcel", "shipment", "shipping", "bought", "buy",
-    "purchase", "purchased", "received", "arrive", "arrived", "where",
+    "order",
+    "orders",
+    "delivery",
+    "deliver",
+    "delivered",
+    "track",
+    "tracking",
+    "status",
+    "package",
+    "parcel",
+    "shipment",
+    "shipping",
+    "bought",
+    "buy",
+    "purchase",
+    "purchased",
+    "received",
+    "arrive",
+    "arrived",
+    "where",
 }
 _ISSUE_KW = {
-    "damaged", "broken", "defective", "faulty", "wrong", "missing", "late",
-    "quality", "stopped", "cracked", "leaking",
+    "damaged",
+    "broken",
+    "defective",
+    "faulty",
+    "wrong",
+    "missing",
+    "late",
+    "quality",
+    "stopped",
+    "cracked",
+    "leaking",
 }
 _COMPLAINT_KW = {"complaint", "complain", "damaged", "broken", "defective", "wrong", "missing", "faulty"}
-_ESCALATE_KW = {"human", "agent", "representative", "manager", "supervisor", "escalate", "escalation", "legal", "lawsuit", "sue"}
+_ESCALATE_KW = {
+    "human",
+    "agent",
+    "representative",
+    "manager",
+    "supervisor",
+    "escalate",
+    "escalation",
+    "legal",
+    "lawsuit",
+    "sue",
+}
 
 _MAX_CONTEXT = 400  # char cap — keeps the prompt within the draft's small budget
 

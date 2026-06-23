@@ -51,15 +51,9 @@ class BusinessSignals(BaseModel):
     churn_risk: bool = Field(description="True if customer shows signs of leaving")
     upsell_opportunity: bool = Field(description="True if customer is open to more services")
     # Lists hard-capped so the combined-classification JSON stays bounded (see SentimentEmotion).
-    feature_requests: list[str] = Field(
-        description="Up to 6 specific features the customer requested", max_length=6
-    )
-    bug_reports: list[str] = Field(
-        description="Up to 6 bugs or broken functionality mentioned", max_length=6
-    )
-    competitor_mentions: list[str] = Field(
-        description="Up to 5 competitors named", max_length=5
-    )
+    feature_requests: list[str] = Field(description="Up to 6 specific features the customer requested", max_length=6)
+    bug_reports: list[str] = Field(description="Up to 6 bugs or broken functionality mentioned", max_length=6)
+    competitor_mentions: list[str] = Field(description="Up to 5 competitors named", max_length=5)
 
 
 class CombinedClassification(BaseModel):

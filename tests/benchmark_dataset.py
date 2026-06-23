@@ -39,7 +39,9 @@ from rich.console import Console
 from rich.table import Table
 
 ANALYZER_URL = os.getenv("ANALYZER_URL", "http://localhost:8080")
-DATA_CSV = os.getenv("DATASET_CSV", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data.csv"))
+DATA_CSV = os.getenv(
+    "DATASET_CSV", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data.csv")
+)
 console = Console()
 
 
@@ -110,8 +112,15 @@ def metrics_delta(before: dict, after: dict) -> dict:
     if not before or not after:
         return {}
     out = {}
-    for k in ("dedup_cache_hits", "dedup_cache_misses", "llm_calls", "llm_calls_saved",
-              "prompt_tokens", "completion_tokens", "needs_review"):
+    for k in (
+        "dedup_cache_hits",
+        "dedup_cache_misses",
+        "llm_calls",
+        "llm_calls_saved",
+        "prompt_tokens",
+        "completion_tokens",
+        "needs_review",
+    ):
         out[k] = round(after.get(k, 0) - before.get(k, 0), 2)
     # Per-stage mean latency over the window.
     stage_means = {}
@@ -196,7 +205,7 @@ def distributions(successes) -> dict:
             cxi.append(exp["cxi_percent"])
         if a.get("pipeline_confidence") is not None:
             conf.append(a["pipeline_confidence"])
-        s = (a.get("sentiment") or {})
+        s = a.get("sentiment") or {}
         if s.get("intensity") is not None:
             intens.append(s["intensity"])
         sentiment[s.get("sentiment", "?")] = sentiment.get(s.get("sentiment", "?"), 0) + 1
@@ -253,7 +262,9 @@ def main():
         succ = level.pop("_successes")
         level["pipeline_metrics"] = metrics_delta(before, after)
         toks = level["pipeline_metrics"].get("completion_tokens", 0) or 0
-        level["completion_tokens_per_sec"] = round(toks / level["wall_elapsed_s"], 1) if level["wall_elapsed_s"] else 0.0
+        level["completion_tokens_per_sec"] = (
+            round(toks / level["wall_elapsed_s"], 1) if level["wall_elapsed_s"] else 0.0
+        )
         all_levels.append(level)
         if dist is None:  # distributions are corpus properties — compute once (first level)
             dist = distributions(succ)
@@ -271,30 +282,45 @@ def main():
         t.add_column(col, justify="right")
     for r in all_levels:
         lat = r["latency_ms"]
-        t.add_row(str(r["concurrency"]), str(r["num_items"]), f"{r['req_per_sec']:.3f}",
-                  f"{r['completion_tokens_per_sec']:.0f}", f"{lat['p50']:.0f}", f"{lat['p95']:.0f}",
-                  f"{lat['p99']:.0f}", f"{lat['max']:.0f}", str(r["failures"]))
-    console.print(); console.print(t)
+        t.add_row(
+            str(r["concurrency"]),
+            str(r["num_items"]),
+            f"{r['req_per_sec']:.3f}",
+            f"{r['completion_tokens_per_sec']:.0f}",
+            f"{lat['p50']:.0f}",
+            f"{lat['p95']:.0f}",
+            f"{lat['p99']:.0f}",
+            f"{lat['max']:.0f}",
+            str(r["failures"]),
+        )
+    console.print()
+    console.print(t)
 
     stages = all_levels[0]["pipeline_metrics"].get("stage_mean_ms", {})
     if stages:
         st = Table(title="Per-stage mean latency (ms)", show_lines=False)
-        st.add_column("Stage"); st.add_column("Mean ms", justify="right")
+        st.add_column("Stage")
+        st.add_column("Mean ms", justify="right")
         for stage, ms in stages.items():
             st.add_row(stage, f"{ms:.1f}")
-        console.print(); console.print(st)
+        console.print()
+        console.print(st)
 
     if dist:
         console.print("\n[bold]Score distributions over corpus:[/bold]")
         for key in ("csi_percent", "cxi_percent", "pipeline_confidence", "intensity_1_10"):
             s = dist[key]
             if s:
-                console.print(f"  {key:22s} mean={s['mean']:.1f} p50={s['p50']:.1f} "
-                              f"p95={s['p95']:.1f} max={s['max']:.1f} (n={s['count']})")
+                console.print(
+                    f"  {key:22s} mean={s['mean']:.1f} p50={s['p50']:.1f} "
+                    f"p95={s['p95']:.1f} max={s['max']:.1f} (n={s['count']})"
+                )
         console.print(f"  sentiment   {dist['sentiment_distribution']}")
         console.print(f"  category    {dist['category_distribution']}")
-        console.print(f"  escalation_rate={dist['escalation_rate_pct']}%  churn_rate={dist['churn_rate_pct']}%  "
-                      f"needs_review={dist['needs_review_count']}")
+        console.print(
+            f"  escalation_rate={dist['escalation_rate_pct']}%  churn_rate={dist['churn_rate_pct']}%  "
+            f"needs_review={dist['needs_review_count']}"
+        )
 
     payload = {"target": ANALYZER_URL, "num_items": len(texts), "levels": all_levels, "distributions": dist}
     with open(args.out, "w") as fh:

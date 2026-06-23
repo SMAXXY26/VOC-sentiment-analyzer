@@ -67,23 +67,24 @@ SCAFFOLD_SYS = (
 )
 
 PROMPT_TMPL = (
-    "<|im_start|>system\n" + SCAFFOLD_SYS + "<|im_end|>\n"
-    "<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n"
+    "<|im_start|>system\n" + SCAFFOLD_SYS + "<|im_end|>\n<|im_start|>user\n{text}<|im_end|>\n<|im_start|>assistant\n"
 )
 
 JUNK = {"", "xyz", "na", "n/a", "none", "-", "nil", "test"}
 
 
 def _decision_json(d: Decision) -> str:
-    return json.dumps({"category": d.category, "sentiment": d.sentiment, "escalate": d.escalate},
-                      separators=(",", ":"))
+    return json.dumps({"category": d.category, "sentiment": d.sentiment, "escalate": d.escalate}, separators=(",", ":"))
 
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--csv", default="data.csv")
-    p.add_argument("--text-col", default="Discussion Points",
-                   help="column holding the free-text feedback (default: 'Discussion Points')")
+    p.add_argument(
+        "--text-col",
+        default="Discussion Points",
+        help="column holding the free-text feedback (default: 'Discussion Points')",
+    )
     p.add_argument("--url", default=os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1"))
     p.add_argument("--out", default="training/data/dpo_corpus.jsonl")
     p.add_argument("--append", action="store_true")
@@ -103,14 +104,23 @@ def main():
     try:
         from training._report import banner, step, summary, warn
     except Exception:
-        def banner(t, s=""): print(f"== {t} == {s}")
-        def step(m): print(f" - {m}")
-        def warn(m): print(f" ! {m}")
-        def summary(t, **k): print(t, k)
+
+        def banner(t, s=""):
+            print(f"== {t} == {s}")
+
+        def step(m):
+            print(f" - {m}")
+
+        def warn(m):
+            print(f" ! {m}")
+
+        def summary(t, **k):
+            print(t, k)
 
     banner("Corpus DPO mining", "unlabelled self-correction · catches Product over-labeling")
 
     import urllib.request
+
     health = args.url.rsplit("/v1", 1)[0] + "/health"
     try:
         urllib.request.urlopen(health, timeout=4)
@@ -147,7 +157,7 @@ def main():
     step(f"{len(rows)} usable rows from {args.csv}::{args.text_col} (limit {args.limit})")
 
     pairs = []
-    corrections = Counter()      # bare_category -> chosen_category
+    corrections = Counter()  # bare_category -> chosen_category
     product_fixes = 0
     skipped_unstable = 0
     skipped_agree = 0
@@ -175,11 +185,13 @@ def main():
             skipped_unstable += 1
             continue
 
-        pairs.append({
-            "prompt": PROMPT_TMPL.format(text=txt),
-            "chosen": _decision_json(cho),
-            "rejected": _decision_json(rej),
-        })
+        pairs.append(
+            {
+                "prompt": PROMPT_TMPL.format(text=txt),
+                "chosen": _decision_json(cho),
+                "rejected": _decision_json(rej),
+            }
+        )
         corrections[f"{rej.category}->{cho.category}"] += 1
         if rej.category == "Product" and cho.category != "Product":
             product_fixes += 1
