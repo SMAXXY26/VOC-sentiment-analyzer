@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTheme } from "@/components/ThemeProvider";
 import { logout } from "@/lib/auth";
 
@@ -46,20 +46,41 @@ const NAV_ITEMS = [
 
 export function Nav() {
   const path = usePathname();
+  // Visuals are driven by the `nav-collapsed` class on <html> (set pre-paint by the
+  // inline script in layout.tsx) — this state is only for the toggle's label/behaviour,
+  // so it's read from the DOM after mount and never used in render-time classes (no
+  // SSR/hydration mismatch, no flash).
   const [collapsed, setCollapsed] = useState(false);
   const { theme, toggle } = useTheme();
+
+  useEffect(() => {
+    setCollapsed(document.documentElement.classList.contains("nav-collapsed"));
+  }, []);
+
+  const toggleCollapse = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      document.documentElement.classList.toggle("nav-collapsed", next);
+      try {
+        localStorage.setItem("nav_collapsed", next ? "1" : "0");
+      } catch {
+        /* ignore storage failures (private mode, etc.) */
+      }
+      return next;
+    });
+  };
+
   return (
     <nav
-      className={`shrink-0 md:h-screen flex md:flex-col gap-1 p-3 bg-white/70 dark:bg-black/40 backdrop-blur-2xl border-b md:border-b-0 md:border-r border-slate-200 dark:border-white/[0.08] shadow-xl shadow-black/5 dark:shadow-black/30 transition-all duration-300 ${
-        collapsed ? "md:w-16" : "md:w-52"
-      }`}
+      data-sidebar
+      className="shrink-0 md:h-screen md:w-52 flex md:flex-col gap-1 p-3 bg-white/70 dark:bg-black/40 backdrop-blur-2xl border-b md:border-b-0 md:border-r border-slate-200 dark:border-white/[0.08] shadow-xl shadow-black/5 dark:shadow-black/30 transition-all duration-300"
     >
       {/* Logo */}
       <div className="flex items-center gap-2 md:mb-2 md:pb-3 md:border-b border-slate-200 dark:border-white/[0.08]">
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 shrink-0">
           <span className="text-white text-[11px] font-bold tracking-tight">CX</span>
         </div>
-        {!collapsed && <span className="font-semibold text-sm text-slate-800 dark:text-white/90 tracking-tight whitespace-nowrap">Analyzer</span>}
+        <span data-nav-label className="font-semibold text-sm text-slate-800 dark:text-white/90 tracking-tight whitespace-nowrap">Analyzer</span>
       </div>
 
       {/* Links */}
@@ -71,37 +92,35 @@ export function Nav() {
               key={item.href}
               href={item.href}
               title={item.label}
+              data-navitem
               className={`flex items-center gap-2.5 text-xs font-medium px-3 py-2 rounded-xl transition-all duration-200 cursor-pointer select-none ${
-                collapsed ? "md:justify-center" : ""
-              } ${
                 active
                   ? "bg-indigo-500/15 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 border border-indigo-500/25 shadow-sm shadow-indigo-500/10"
                   : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-900/[0.04] dark:hover:bg-white/[0.05]"
               }`}
             >
               <span className="shrink-0">{item.icon}</span>
-              {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
+              <span data-nav-label className="whitespace-nowrap">{item.label}</span>
             </Link>
           );
         })}
       </div>
 
       {/* Live indicator */}
-      <div className={`hidden md:flex items-center gap-1.5 py-2 ${collapsed ? "justify-center" : "px-3"}`}>
+      <div data-navitem className="hidden md:flex items-center gap-1.5 py-2 px-3">
         <span className="relative flex h-2 w-2 shrink-0">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-50" />
           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
         </span>
-        {!collapsed && <span className="text-[11px] text-slate-500">Live</span>}
+        <span data-nav-label className="text-[11px] text-slate-500">Live</span>
       </div>
 
       {/* Theme toggle */}
       <button
         onClick={toggle}
         title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-        className={`flex items-center gap-2.5 text-xs font-medium px-3 py-2 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-900/[0.04] dark:hover:bg-white/[0.05] transition-all duration-200 cursor-pointer select-none ${
-          collapsed ? "md:justify-center" : ""
-        }`}
+        data-navitem
+        className="flex items-center gap-2.5 text-xs font-medium px-3 py-2 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-900/[0.04] dark:hover:bg-white/[0.05] transition-all duration-200 cursor-pointer select-none"
       >
         {theme === "dark" ? (
           // Sun
@@ -114,33 +133,32 @@ export function Nav() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" />
           </svg>
         )}
-        {!collapsed && <span className="whitespace-nowrap">{theme === "dark" ? "Light" : "Dark"} mode</span>}
+        <span data-nav-label className="whitespace-nowrap">{theme === "dark" ? "Light" : "Dark"} mode</span>
       </button>
 
       {/* Logout */}
       <button
         onClick={logout}
         title="Sign out"
-        className={`flex items-center gap-2.5 text-xs font-medium px-3 py-2 rounded-xl text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/[0.06] transition-all duration-200 cursor-pointer select-none ${
-          collapsed ? "md:justify-center" : ""
-        }`}
+        data-navitem
+        className="flex items-center gap-2.5 text-xs font-medium px-3 py-2 rounded-xl text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/[0.06] transition-all duration-200 cursor-pointer select-none"
       >
         <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
         </svg>
-        {!collapsed && <span className="whitespace-nowrap">Sign out</span>}
+        <span data-nav-label className="whitespace-nowrap">Sign out</span>
       </button>
 
       {/* Collapse toggle (desktop only) */}
       <button
-        onClick={() => setCollapsed((c) => !c)}
+        onClick={toggleCollapse}
         title={collapsed ? "Expand" : "Collapse"}
-        className={`hidden md:flex items-center gap-2.5 text-xs font-medium px-3 py-2 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-900/[0.04] dark:hover:bg-white/[0.05] transition-all duration-200 cursor-pointer select-none ${
-          collapsed ? "justify-center" : ""
-        }`}
+        data-navitem
+        className="hidden md:flex items-center gap-2.5 text-xs font-medium px-3 py-2 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-900/[0.04] dark:hover:bg-white/[0.05] transition-all duration-200 cursor-pointer select-none"
       >
         <svg
-          className={`w-4 h-4 shrink-0 transition-transform duration-300 ${collapsed ? "rotate-180" : ""}`}
+          data-collapse-icon
+          className="w-4 h-4 shrink-0 transition-transform duration-300"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -148,7 +166,7 @@ export function Nav() {
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
         </svg>
-        {!collapsed && <span className="whitespace-nowrap">Collapse</span>}
+        <span data-nav-label className="whitespace-nowrap">Collapse</span>
       </button>
     </nav>
   );

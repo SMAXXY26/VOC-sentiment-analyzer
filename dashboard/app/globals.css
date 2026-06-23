@@ -29,6 +29,17 @@
   html.dark ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
 
   * { -webkit-font-smoothing: antialiased; }
+
+  /* Persisted sidebar collapse. Driven entirely by the `nav-collapsed` class that the
+     inline no-flash script (layout.tsx) sets on <html> before paint — so the sidebar
+     renders in its saved state immediately, with no expand-then-collapse flash.
+     md+ only (on mobile the nav is a horizontal bar and never collapses). */
+  @media (min-width: 768px) {
+    html.nav-collapsed nav[data-sidebar] { width: 4rem; }
+    html.nav-collapsed [data-nav-label] { display: none; }
+    html.nav-collapsed [data-navitem] { justify-content: center; }
+  }
+  html.nav-collapsed [data-collapse-icon] { transform: rotate(180deg); }
 }
 
 @layer utilities {

@@ -9,7 +9,7 @@ export const metadata = { title: "CX Analyzer", description: "Customer Experienc
 
 // Applies the persisted theme to <html> before first paint to avoid a flash of
 // the wrong theme. Defaults to dark when nothing is stored.
-const noFlashScript = `(function(){try{var t=localStorage.getItem('theme');if(t!=='light'){document.documentElement.classList.add('dark');}}catch(e){document.documentElement.classList.add('dark');}})();`;
+const noFlashScript = `(function(){try{var t=localStorage.getItem('theme');if(t!=='light'){document.documentElement.classList.add('dark');}}catch(e){document.documentElement.classList.add('dark');}try{if(localStorage.getItem('nav_collapsed')==='1'){document.documentElement.classList.add('nav-collapsed');}}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
