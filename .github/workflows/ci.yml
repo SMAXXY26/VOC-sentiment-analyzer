@@ -53,7 +53,10 @@ jobs:
           components: rustfmt, clippy
 
       - name: Install librdkafka build deps
-        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev
+        # librdkafka 2.12 (bundled by rdkafka-sys) builds from source via CMake
+        # with WITH_CURL on by default, and links sasl/zstd/zlib. Without these
+        # -dev headers the build aborts (e.g. "curl/curl.h: No such file").
+        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev libcurl4-openssl-dev libsasl2-dev libzstd-dev zlib1g-dev
 
       - name: cargo fmt
         run: cargo fmt --check
