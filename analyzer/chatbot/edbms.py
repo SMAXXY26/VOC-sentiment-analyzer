@@ -17,6 +17,49 @@ from typing import Optional
 
 _DB_PATH = os.path.join(os.path.dirname(__file__), "edbms.db")
 
+# Query/filler words to ignore when keyword-filtering orders, so generic phrasings
+# ("what is the status of my order?") fall through to "show recent orders" instead
+# of spuriously matching a product/category substring. Product/issue words (shoes,
+# damaged, late, missing…) are deliberately NOT here so they still filter.
+_STOPWORDS = {
+    "what",
+    "when",
+    "where",
+    "which",
+    "status",
+    "order",
+    "orders",
+    "mine",
+    "have",
+    "with",
+    "will",
+    "your",
+    "about",
+    "please",
+    "want",
+    "need",
+    "tell",
+    "show",
+    "give",
+    "could",
+    "would",
+    "there",
+    "here",
+    "from",
+    "like",
+    "just",
+    "also",
+    "some",
+    "this",
+    "that",
+    "they",
+    "them",
+    "does",
+    "recent",
+    "latest",
+    "update",
+}
+
 
 def _hash(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
@@ -114,17 +157,24 @@ def _seed() -> None:
         now = time.time()
         purchases = [
             # (user_id, product_id, order_ref, order_date_offset_days, delivery_offset, amount, status, issue)
+            # status: processing | in_transit | out_for_delivery | delivered | cancelled
+            # Each user has at least one *live* (not-yet-delivered) order so "what's my
+            # order status?" has something current to report ("on the way", etc.).
             (1, 1, "ORD-A001", -30, -27, 89.99, "delivered", None),
             (1, 5, "ORD-A002", -14, -11, 45.00, "delivered", None),
             (1, 3, "ORD-A003", -3, 0, 59.99, "delivered", "damaged"),
+            (1, 7, "ORD-A004", -1, None, 69.99, "out_for_delivery", None),  # alice: on the way today
+            (1, 4, "ORD-A005", 0, None, 35.00, "processing", None),  # alice: just placed
             (2, 2, "ORD-B001", -60, -57, 129.00, "delivered", None),
             (2, 7, "ORD-B002", -7, -4, 69.99, "delivered", "wrong_item"),
             (2, 4, "ORD-B003", -1, None, 35.00, "in_transit", None),
             (3, 6, "ORD-C001", -10, -7, 49.99, "delivered", None),
             (3, 8, "ORD-C002", -5, -2, 25.00, "delivered", "missing"),
             (3, 1, "ORD-C003", -2, 0, 89.99, "delivered", None),
+            (3, 2, "ORD-C004", -1, None, 129.00, "out_for_delivery", None),  # carol: on the way
             (4, 3, "ORD-D001", -45, -42, 59.99, "delivered", None),
             (4, 5, "ORD-D002", -3, 0, 45.00, "delivered", "late"),
+            (4, 8, "ORD-D003", -1, None, 25.00, "in_transit", None),  # dave: in transit
             (5, 2, "ORD-E001", -20, -17, 129.00, "delivered", None),
             (5, 7, "ORD-E002", -1, None, 69.99, "processing", None),
         ]
@@ -170,9 +220,23 @@ def get_customer(username: str) -> Optional[dict]:
 
 
 def get_account_info(user_id: int) -> dict:
+    """Account profile plus a rollup of the customer's orders, for the chatbot to
+    report from ("you're a premium member with 5 orders, 2 still on the way")."""
     with _conn() as con:
         row = con.execute("SELECT name, email, tier, join_date FROM users WHERE id=?", (user_id,)).fetchone()
-    return dict(row) if row else {}
+        if not row:
+            return {}
+        info = dict(row)
+        counts = con.execute(
+            """SELECT COUNT(*) AS total_orders,
+                      SUM(CASE WHEN status IN ('processing','in_transit','out_for_delivery')
+                               THEN 1 ELSE 0 END) AS active_orders
+               FROM recent_purchases WHERE user_id=?""",
+            (user_id,),
+        ).fetchone()
+    info["total_orders"] = counts["total_orders"] or 0
+    info["active_orders"] = counts["active_orders"] or 0
+    return info
 
 
 def get_recent_purchases(user_id: int, keywords: str = "") -> list[dict]:
@@ -193,7 +257,12 @@ def get_recent_purchases(user_id: int, keywords: str = "") -> list[dict]:
     results = [dict(r) for r in rows]
 
     if keywords and keywords.strip():
-        kws = {k.lower() for k in keywords.split()}
+        # Only match on meaningful tokens: drop stopwords and very short words so
+        # "status **of** my order" doesn't spuriously match "Home **Of**fice" and
+        # hide the live orders. When nothing meaningful matches, fall through to
+        # returning all recent orders (most-recent-first), which surfaces the
+        # active ones for generic "what's my order status?" questions.
+        kws = {k.lower() for k in keywords.split() if len(k) >= 4 and k.lower() not in _STOPWORDS}
         filtered = [
             r
             for r in results

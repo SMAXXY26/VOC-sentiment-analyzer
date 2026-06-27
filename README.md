@@ -18,7 +18,7 @@
 
 ---
 
-A 12-stage LangChain LCEL pipeline (7 LLM stages + rule-based dedup/normalize/PII/confidence/store), Qdrant vector DB, Rust/Kafka ingestion, an agentic support chatbot with model-cascade routing, a closed-loop fine-tuning pipeline (SFT → DPO → AWQ), and a Next.js analytics dashboard. Runs on a two-laptop home lab over LAN.
+A 12-stage LangChain LCEL pipeline (7 LLM stages + rule-based dedup/normalize/PII/confidence/store), Qdrant vector DB, Rust/Kafka ingestion, a draft-model support chatbot with deterministic EDBMS tools, a closed-loop fine-tuning pipeline (SFT → DPO → AWQ), and a Next.js analytics dashboard. Runs on a two-laptop home lab over LAN.
 
 > **Measured:** 82 tok/s · 63 ms TTFT (p50) at concurrency 2 on a laptop RTX 4070 8GB (AWQ + Marlin). Full 7-LLM-stage pipeline ≈ **14 s p50 / 16 s p95** over a 676-item real dataset. Methodology and comparison to published numbers (A100 Qwen, desktop llama.cpp) in [`tests/BENCHMARK_RESULTS.md`](tests/BENCHMARK_RESULTS.md) — these are single-setup home-lab measurements, not a controlled cross-hardware study.
 
@@ -136,35 +136,36 @@ flowchart LR
 
 Beyond the core pipeline, the following are fully implemented:
 
-### Agentic Support Chatbot (`analyzer/chatbot/`)
-LangGraph ReAct agent with **model cascade routing**:
-- **Simple queries** → Qwen2.5-1.5B (draft model, server laptop 1650 Ti, port 8001) — fast and cheap
-- **Complex / emotional queries** → Qwen2.5-7B (big model) — authoritative reasoning
+### Support Chatbot (`analyzer/chatbot/`)
+A customer-support chatbot that runs entirely on the **Qwen2.5-1.5B draft model**
+(server laptop 1650 Ti, port 8001). The 1.5B model can't do reliable LLM tool-calling,
+so rather than a ReAct loop the "tools" are resolved **deterministically in Python**
+(`context_router.py`): keyword routing fetches the logged-in customer's own rows from
+the EDBMS — and performs any clearly-requested action — then hands the model one compact
+`CONTEXT` block to phrase its reply from. This keeps order/refund/escalation handling
+working on a weak model with no hallucinated order numbers and no cross-customer leakage
+(every query is scoped by `user_id`).
 
 ```mermaid
 flowchart TD
-    U["User message"] --> SOC["start_conversation (SOC)<br/>EDBMS login + stats snapshot"]
-    SOC --> CLF{"1.5B model-based router<br/>(keyword fallback)"}
-    CLF -->|"simple"| SMALL["Qwen2.5-1.5B · :8001"]
-    CLF -->|"complex / emotional"| BIG["Qwen2.5-7B · :8000"]
-    SMALL --> AGENT["ReAct agent + 8 tools<br/>(call budget + timeouts)"]
-    BIG --> AGENT
-    AGENT -->|"tool call"| TOOLS["orders · refunds · FAQ · web_search · escalate"]
-    TOOLS --> AGENT
-    AGENT --> R["reply (≤180 tok)"]
+    U["User message"] --> SOC["start_conversation (SOC)<br/>EDBMS login (username + password)"]
+    SOC --> CTX["build_context (Python)<br/>keyword-routed EDBMS reads + actions"]
+    CTX --> DRAFT["single Qwen2.5-1.5B call · :8001<br/>(no tool-calling, no ReAct)"]
+    DRAFT --> R["reply (≤130 tok)"]
     R --> EOC["end_conversation (EOC)<br/>summary vector → chat_sessions"]
 ```
 
-Routing is **model-based** (`analyzer/routing.py`): a low-token call to the 1.5B model
-classifies complex/simple, reading intent rather than keywords (e.g. "I'm fine, just
-want to cancel" → complex). The keyword list is only a fallback when the draft model is
-unavailable. Tools have a per-turn call budget (web_search capped) and wall-clock timeouts.
+Python-resolved "tools" (keyword-triggered, all scoped to the authenticated user):
+- `get_recent_purchases` — order / delivery / status questions (keyword-filtered, stopword-aware so generic "what's my order status?" surfaces live orders)
+- `get_account_info` — account / tier / membership questions (profile + order rollup)
+- `create_ticket` — refund / complaint / escalation actions
+- FAQ lookup — common topics (`tools.py:_FAQ`)
 
-Tools: `get_my_orders` · `lookup_purchase_context` · `get_account_info` · `log_complaint` · `request_refund` · `escalate_to_human` · `get_faq_answer` · `web_search` (DuckDuckGo, no API key)
+Auth: SQLite EDBMS (`edbms.py`) — login with username + password; reads are filtered to
+the customer's own account. Demo users: `alice/bob/carol/dave/eve` — password `pass123`.
 
-Auth: SQLite EDBMS (`edbms.py`) — login with username + password; agent queries purchase history by keyword from the customer's account. Demo users: `alice/bob/carol/dave/eve` — password `pass123`.
-
-Session memory capped at 250 tokens. Sessions expire after 1 hour.
+The big 7B model is **not** used by the chatbot (it's the pipeline's model). Session
+memory is capped at 250 tokens; sessions expire after 1 hour.
 
 ### Topic Clustering (`analyzer/clustering.py`)
 KMeans over stored feedback embeddings. Auto-selects k via silhouette score sweep (k=3–12). LLM generates 3–5 word human-readable labels per cluster. Writes `cluster_id` + `cluster_label` back to Qdrant payloads.
@@ -365,10 +366,11 @@ bash training/merge_and_quantize.sh
 │   │   ├── confidence_stage.py     # Weighted confidence → review queue trigger
 │   │   ├── store_result.py         # Qdrant write with 3-tier failsafe
 │   │   └── store_buffer.py         # Local JSONL fallback buffer (last resort)
-│   ├── chatbot/                    # LangGraph ReAct support agent
-│   │   ├── agent.py                # Graph, sessions, SOC/EOC lifecycle
-│   │   ├── cascade_llm.py          # Query complexity classifier (shared keyword set)
-│   │   ├── tools.py                # 8 tools (orders, refunds, FAQ, web search, escalate)
+│   ├── chatbot/                    # Draft-model support chatbot (no tool-calling)
+│   │   ├── agent.py                # Sessions, SOC/EOC lifecycle, single draft call
+│   │   ├── context_router.py       # Keyword-routed EDBMS reads/actions → CONTEXT
+│   │   ├── cascade_llm.py          # Draft-model client (get_draft_llm) + cascade router
+│   │   ├── tools.py                # FAQ table + tool helpers
 │   │   ├── edbms.py                # SQLite customer DB (auth + purchase history)
 │   │   ├── memory.py               # Token-capped session memory
 │   │   └── orders.py               # Purchase history queries

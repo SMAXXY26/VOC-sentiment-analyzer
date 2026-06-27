@@ -28,6 +28,10 @@ training/checkpoints
 training/merged
 training/quantized
 
+# Chatbot EDBMS — must be seeded fresh inside the container, never baked from a
+# local copy (a stale db would skip _seed() and ship outdated demo data).
+**/edbms.db
+
 # Misc local artifacts
 build.log
 Miniforge3*.sh

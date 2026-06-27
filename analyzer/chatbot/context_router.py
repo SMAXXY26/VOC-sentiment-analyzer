@@ -14,31 +14,72 @@ from __future__ import annotations
 
 import re
 
-from .edbms import create_ticket, get_recent_purchases
+from .edbms import create_ticket, get_account_info, get_recent_purchases
 from .tools import _FAQ
 
-# Keyword sets for routing. Kept small and lowercase; matched against the message.
+# Keyword sets for routing. Lowercase; matched against the message's words.
+# Kept generous on purpose — a missed keyword means a DB read doesn't fire and the
+# user gets a generic reply, so we'd rather over-fetch (it's cheap + scoped to uid).
 _ORDER_KW = {
     "order",
     "orders",
+    "ordered",
     "delivery",
     "deliver",
     "delivered",
     "track",
     "tracking",
     "status",
+    "update",
     "package",
     "parcel",
     "shipment",
     "shipping",
+    "shipped",
     "bought",
     "buy",
     "purchase",
     "purchased",
+    "purchases",
     "received",
+    "receive",
     "arrive",
     "arrived",
+    "arriving",
     "where",
+    "when",
+    "eta",
+    "coming",
+    "recent",
+    "last",
+    "latest",
+    "history",
+    "item",
+    "items",
+    "return",
+    "returns",
+    "cancel",
+    "cancelled",
+    "my",
+    "mine",
+}
+# Account / membership questions → profile + order rollup.
+_ACCOUNT_KW = {
+    "account",
+    "profile",
+    "tier",
+    "membership",
+    "member",
+    "loyalty",
+    "points",
+    "email",
+    "since",
+    "level",
+    "plan",
+    "subscription",
+    "details",
+    "balance",
+    "standing",
 }
 _ISSUE_KW = {
     "damaged",
@@ -96,6 +137,16 @@ def build_context(user_message: str, customer: dict) -> str:
     if words & _ORDER_KW or words & _ISSUE_KW:
         orders = get_recent_purchases(uid, keywords=user_message)
         parts.append("Recent orders: " + _fmt_orders(orders) if orders else "No matching recent orders found.")
+
+    # 1b. Account / membership profile + order rollup.
+    if words & _ACCOUNT_KW:
+        acct = get_account_info(uid)
+        if acct:
+            parts.append(
+                f"Account: {acct.get('name')}, {acct.get('tier')} tier, member since "
+                f"{acct.get('join_date', '?')}, {acct.get('total_orders', 0)} orders "
+                f"({acct.get('active_orders', 0)} active)"
+            )
 
     # 2. One FAQ snippet for a recognised topic (one is enough for the token budget).
     for key, ans in _FAQ.items():
