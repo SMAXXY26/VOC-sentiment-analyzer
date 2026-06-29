@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import useSWR from "swr";
 import { fetchAnalyses, fetchSummary } from "@/lib/api";
 import type { AnalysisItem, SearchFilters } from "@/lib/api";
@@ -98,23 +98,72 @@ export default function OutputsPage() {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<SearchFilters>({});
   const [items, setItems] = useState<AnalysisItem[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(false);
+  // Tracks how many items are currently loaded so the periodic refresh can
+  // re-fetch the same count instead of collapsing back to page 0 (which caused
+  // a scroll jump + sentinel re-trigger loop = flicker).
+  const loadedRef = useRef(PAGE_SIZE);
 
   const { data: summary } = useSWR("summary", fetchSummary, { refreshInterval: 30000 });
   const categories = Object.keys(summary?.top_categories ?? {});
 
-  // Initial load + search + filters (filters re-key the request so they apply live)
+  // Initial load + search + filters — always resets to page 0.
+  // Load more is disabled for search queries (backend vector search has no offset).
+  // No refreshInterval here: silent refresh is handled separately below so it
+  // doesn't clobber loaded pages mid-scroll.
   useSWR(["analyses", search, filters], async () => {
-    const res = await fetchAnalyses(PAGE_SIZE, search || undefined, filters);
+    const res = await fetchAnalyses(PAGE_SIZE, search || undefined, filters, 0);
     setItems(res.items);
+    setOffset(res.items.length);
+    loadedRef.current = res.items.length;
+    setHasMore(!search && res.items.length === PAGE_SIZE);
     setInitialLoaded(true);
     return res;
-  }, { refreshInterval: 30000 });
+  }, { revalidateOnFocus: false });
+
+  // Silent 30s refresh that preserves how many items are loaded — re-fetches the
+  // current count at offset 0 so the list updates in place with no jump/flicker.
+  // Disabled while a search query is active (vector search isn't paginated).
+  useEffect(() => {
+    if (search) return;
+    const id = setInterval(async () => {
+      const want = Math.max(loadedRef.current, PAGE_SIZE);
+      try {
+        const res = await fetchAnalyses(want, undefined, filters, 0);
+        setItems(res.items);
+        setOffset(res.items.length);
+        loadedRef.current = res.items.length;
+        setHasMore(res.items.length === want);
+      } catch {
+        // ignore — next tick retries
+      }
+    }, 30000);
+    return () => clearInterval(id);
+  }, [search, filters]);
+
+  async function loadMore() {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const res = await fetchAnalyses(PAGE_SIZE, undefined, filters, offset);
+      setItems(prev => [...prev, ...res.items]);
+      setOffset(prev => prev + res.items.length);
+      loadedRef.current += res.items.length;
+      setHasMore(res.items.length === PAGE_SIZE);
+    } catch {
+      // silently ignore — user can scroll again to retry
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   return (
     <div className="flex flex-col lg:flex-row gap-4 lg:h-full w-full max-w-[1800px] mx-auto animate-fade-in">
       {/* LEFT — feedback list (panel scrolls on lg+, page scrolls below that) */}
-      <div className="w-full lg:w-[42%] lg:min-w-[380px] xl:max-w-[600px] h-[65vh] lg:h-auto flex flex-col rounded-2xl bg-slate-900/[0.02] dark:bg-white/[0.02] border border-slate-200/70 dark:border-white/[0.07] overflow-hidden shrink-0">
+      <div className="w-full lg:w-[42%] lg:min-w-[380px] xl:max-w-[600px] h-[65vh] lg:h-auto flex flex-col rounded-2xl glass overflow-hidden shrink-0">
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200/70 dark:border-white/[0.05] shrink-0">
           <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-slate-500">Feedback Items</p>
           {initialLoaded && (
@@ -133,7 +182,12 @@ export default function OutputsPage() {
           />
         </div>
         <div className="flex-1 overflow-y-auto p-4">
-          <AnalysisTable items={items} />
+          <AnalysisTable
+            items={items}
+            onLoadMore={loadMore}
+            hasMore={hasMore}
+            loadingMore={loadingMore}
+          />
         </div>
       </div>
 
@@ -155,7 +209,7 @@ export default function OutputsPage() {
 
         {/* Top Feature Requests — surfaced at the top as the primary signal */}
         {summary && (
-          <div className="rounded-2xl bg-gradient-to-br from-indigo-500/[0.08] to-transparent border border-indigo-500/20 dark:border-indigo-500/15 p-5">
+          <div className="rounded-2xl glass p-5 border-indigo-500/25 dark:border-indigo-500/20 bg-gradient-to-br from-indigo-500/[0.06] to-transparent">
             <div className="flex items-center justify-between mb-4">
               <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-300">Top Feature Requests</p>
               <span className="text-[10px] text-slate-500 font-mono">{summary.top_feature_requests?.length ?? 0} unique</span>
@@ -181,56 +235,29 @@ export default function OutputsPage() {
 
         {/* Bento row 2 — asymmetric: donut (5) + categories (7) */}
         <div className="grid grid-cols-12 gap-3">
-          <div className="col-span-12 xl:col-span-5 rounded-2xl bg-slate-900/[0.03] dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.07] p-5">
+          <div className="col-span-12 xl:col-span-5 rounded-2xl glass p-5">
             {summary
               ? <SentimentChart distribution={summary.sentiment_distribution} />
               : <div className="h-40 flex items-center justify-center"><div className="w-5 h-5 border-2 border-indigo-500/30 border-t-indigo-400 rounded-full animate-spin" /></div>
             }
           </div>
-          <div className="col-span-12 xl:col-span-7 rounded-2xl bg-slate-900/[0.03] dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.07] p-5">
+          <div className="col-span-12 xl:col-span-7 rounded-2xl glass p-5">
             {summary && <CategoryRadial categories={summary.top_categories} />}
           </div>
         </div>
 
         {/* Daily volume bar chart */}
-        <div className="rounded-2xl bg-slate-900/[0.03] dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.07] p-5">
+        <div className="rounded-2xl glass p-5">
           <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-slate-500 mb-4">Feedback Volume by Day</p>
           {summary && <DailyVolumeChart counts={summary.daily_counts} />}
         </div>
 
         {/* Feature-request word cloud */}
-        <div className="rounded-2xl bg-slate-900/[0.03] dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.07] p-5">
+        <div className="rounded-2xl glass p-5">
           <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-slate-500 mb-4">Most-Used Words</p>
           {summary && <WordCloud counts={summary.word_frequencies} />}
         </div>
 
-        {/* Bento row 3 — rate stats */}
-        <div className="grid grid-cols-12 gap-3">
-          <div className="col-span-12 grid grid-cols-2 gap-3">
-            {summary && [
-              {
-                label: "Escalation Rate",
-                value: summary.total ? `${Math.round((summary.escalation_count / summary.total) * 100)}%` : "—",
-                sub: `${summary.escalation_count} items flagged`,
-                color: "text-red-600 dark:text-red-300",
-                from: "from-red-500/[0.08]",
-              },
-              {
-                label: "Churn Rate",
-                value: summary.total ? `${Math.round((summary.churn_count / summary.total) * 100)}%` : "—",
-                sub: `${summary.churn_count} at risk`,
-                color: "text-orange-600 dark:text-orange-300",
-                from: "from-orange-500/[0.08]",
-              },
-            ].map((s) => (
-              <div key={s.label} className={`rounded-2xl bg-gradient-to-br ${s.from} to-transparent border border-slate-200/70 dark:border-white/[0.07] p-5`}>
-                <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-slate-500 mb-3">{s.label}</p>
-                <p className={`text-4xl font-bold ${s.color} tracking-tight tabular-nums`}>{s.value}</p>
-                <p className="text-[11px] text-slate-400 dark:text-slate-600 mt-1.5">{s.sub}</p>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );

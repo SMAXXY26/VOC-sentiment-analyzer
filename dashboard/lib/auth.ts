@@ -4,6 +4,7 @@
 
 const TOKEN_KEY = "cx_auth_token";
 const USER_KEY = "cx_auth_user";
+const ROLE_KEY = "cx_auth_role";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -17,6 +18,12 @@ export function setToken(token: string): void {
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(ROLE_KEY);
+}
+
+export function getRole(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(ROLE_KEY);
 }
 
 export function getUser(): string | null {
@@ -43,6 +50,7 @@ export async function login(username: string, password: string): Promise<{ usern
   const data = await res.json();
   setToken(data.token);
   localStorage.setItem(USER_KEY, data.username);
+  localStorage.setItem(ROLE_KEY, data.role ?? "customer");
   return { username: data.username, role: data.role };
 }
 

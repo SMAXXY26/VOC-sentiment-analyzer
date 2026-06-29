@@ -3,6 +3,9 @@
 *.env
 .env.*
 
+# ── Chatbot demo DB (seeded fresh at runtime; never commit) ─────────────────────
+**/edbms.db
+
 # ── Python ─────────────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc

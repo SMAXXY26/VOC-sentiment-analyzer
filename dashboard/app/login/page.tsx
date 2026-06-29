@@ -26,7 +26,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center">
-      <form onSubmit={onSubmit} className="w-full max-w-sm glass rounded-2xl p-7 border border-slate-200/70 dark:border-white/[0.07]">
+      <form onSubmit={onSubmit} className="w-full max-w-sm glass rounded-2xl p-7 border border-slate-200/70 dark:border-white/[0.07] animate-scale-in">
         <h1 className="text-lg font-semibold text-slate-900 dark:text-white tracking-tight">Sign in</h1>
         <p className="text-[11px] text-slate-500 mt-0.5 font-mono mb-6">CX Analyzer dashboard</p>
 

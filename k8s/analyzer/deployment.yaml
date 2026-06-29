@@ -25,6 +25,14 @@ spec:
           envFrom:
             - configMapRef:
                 name: analyzer-config
+            # Auth secrets (AUTH_SECRET, DASHBOARD_ADMIN_PASSWORD). Created out-of-band
+            # (not committed): kubectl create secret generic analyzer-auth -n cx-pipeline
+            #   --from-literal=AUTH_SECRET=... --from-literal=DASHBOARD_ADMIN_PASSWORD=...
+            # See k8s/analyzer/auth-secret.example.yaml. Optional so the pod still starts
+            # if it's absent (auth just stays on with a dev-default secret + a warning).
+            - secretRef:
+                name: analyzer-auth
+                optional: true
           ports:
             - containerPort: 8080
           readinessProbe:

@@ -1,8 +1,10 @@
+import { useCountUp } from "@/lib/hooks";
 import type { AnalysesSummary } from "@/lib/api";
 
 interface CardConfig {
   label: string;
   value: string | number;
+  rawValue?: number;
   sub?: string;
   from: string;
   to: string;
@@ -11,26 +13,32 @@ interface CardConfig {
   icon: React.ReactNode;
 }
 
-function GlowCard({ label, value, sub, from, to, border, text, icon }: CardConfig) {
+function GlowCard({ label, value, rawValue, sub, from, to, border, text, icon, index }: CardConfig & { index: number }) {
+  const count = useCountUp(rawValue ?? 0, 800);
+  const display = rawValue !== undefined ? count : value;
+
   return (
-    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${from} ${to} border ${border} p-5 shadow-lg transition-all duration-300 glass-hover`}>
+    <div
+      className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${from} ${to} border ${border} p-5 shadow-lg transition-all duration-300 glass-hover animate-fade-up animate-fill-both`}
+      style={{ animationDelay: `${index * 70}ms` }}
+    >
       <div className="flex items-start justify-between mb-4">
         <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-600 dark:text-slate-400">{label}</p>
         <div className={`${text} opacity-50`}>{icon}</div>
       </div>
-      <p className={`text-3xl font-bold ${text} tracking-tight tabular-nums`}>{value ?? "—"}</p>
+      <p className={`text-3xl font-bold ${text} tracking-tight tabular-nums`}>{display ?? "—"}</p>
       {sub && <p className="text-[11px] text-slate-500 mt-1">{sub}</p>}
-      {/* Subtle corner glow */}
       <div className={`absolute -bottom-4 -right-4 w-20 h-20 rounded-full ${from} blur-2xl opacity-40`} />
     </div>
   );
 }
 
 export function SummaryCards({ data }: { data: AnalysesSummary }) {
-  const cards: CardConfig[] = [
+  const cards: (Omit<CardConfig, "value"> & { value: string | number })[] = [
     {
       label: "Total Analyzed",
       value: data.total,
+      rawValue: data.total,
       sub: "feedback items processed",
       from: "from-indigo-500/[0.12]",
       to: "to-transparent",
@@ -45,6 +53,7 @@ export function SummaryCards({ data }: { data: AnalysesSummary }) {
     {
       label: "Escalated",
       value: data.escalation_count,
+      rawValue: data.escalation_count,
       sub: "require immediate action",
       from: "from-red-500/[0.12]",
       to: "to-transparent",
@@ -59,6 +68,7 @@ export function SummaryCards({ data }: { data: AnalysesSummary }) {
     {
       label: "Churn Risk",
       value: data.churn_count,
+      rawValue: data.churn_count,
       sub: "customers at risk",
       from: "from-orange-500/[0.12]",
       to: "to-transparent",
@@ -88,7 +98,7 @@ export function SummaryCards({ data }: { data: AnalysesSummary }) {
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      {cards.map((c) => <GlowCard key={c.label} {...c} />)}
+      {cards.map((c, i) => <GlowCard key={c.label} {...c} index={i} />)}
     </div>
   );
 }

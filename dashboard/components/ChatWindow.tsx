@@ -113,7 +113,7 @@ export function ChatWindow({ sessionId, initialMessages = [], onEnd, compact = f
           <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[85%] text-xs rounded-2xl px-3 py-2 leading-relaxed ${
               m.role === "user"
-                ? "bg-indigo-500/20 text-indigo-100 border border-indigo-500/20 rounded-tr-sm"
+                ? "bg-indigo-500 text-white border border-indigo-600/30 rounded-tr-sm"
                 : "bg-slate-900/[0.05] dark:bg-white/[0.05] text-slate-800 dark:text-slate-200 border border-slate-200/70 dark:border-white/[0.06] rounded-tl-sm"
             }`}>
               {m.content}

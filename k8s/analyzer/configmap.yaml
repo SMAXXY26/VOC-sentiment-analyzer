@@ -24,8 +24,12 @@ data:
   KAFKA_BROKERS: "redpanda:9092"
   # Draft LLM (Qwen2.5-1.5B on server laptop 1650 Ti) — empty = always use big model
   DRAFT_LLM_URL: "http://draft-llm:8001/v1"
-  # API auth — set a non-empty string to require X-API-Key header on all endpoints
-  # except /health and /ready. Leave empty to disable auth (backward-compatible default).
+  # API auth. AUTH_REQUIRED=true turns the global auth gate ON: every endpoint
+  # except /health, /ready, /auth/login, /metrics requires a valid dashboard bearer
+  # token (or the static API_KEY below). Without this the API + NodePort are open.
+  AUTH_REQUIRED: "true"
+  # Optional shared service key (machine-to-machine). The dashboard uses bearer
+  # tokens, not this. Leave empty unless a backend service needs X-API-Key.
   API_KEY: ""
   # CORS origins — comma-separated list (e.g. "https://app.example.com").
   # Leave empty to allow all origins (default).

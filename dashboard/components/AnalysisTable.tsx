@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { Fragment, useState, useEffect, useRef } from "react";
 import type { AnalysisItem } from "@/lib/api";
 import { SentimentBadge } from "./SentimentBadge";
 import { RiskBadge } from "./RiskBadge";
@@ -81,17 +81,17 @@ export function AnalysisTable({ items, onLoadMore, hasMore = false, loadingMore 
           </thead>
           <tbody>
             {items.map((item, i) => (
-              <>
+              <Fragment key={i}>
                 <tr
-                  key={i}
                   onClick={() => setExpanded(expanded === i ? null : i)}
-                  className={`border-b border-slate-200/70 dark:border-white/[0.03] cursor-pointer transition-all duration-150 ${
+                  className={`border-b border-slate-200/70 dark:border-white/[0.03] cursor-pointer transition-all duration-150 animate-fade-in animate-fill-both ${
                     i % 2 === 1 ? "bg-slate-900/[0.01] dark:bg-white/[0.01]" : ""
                   } ${
                     expanded === i
                       ? "bg-slate-900/[0.04] dark:bg-white/[0.04] border-l-2 border-l-indigo-500/50"
                       : "hover:bg-slate-900/[0.025] dark:hover:bg-white/[0.025] hover:border-l-2 hover:border-l-indigo-500/30"
                   }`}
+                  style={{ animationDelay: `${Math.min(i, 15) * 30}ms` }}
                 >
                   <td className="px-4 py-2.5 max-w-[200px]">
                     <p className="truncate text-slate-800 dark:text-slate-200 text-xs">{item.summary}</p>
@@ -103,7 +103,7 @@ export function AnalysisTable({ items, onLoadMore, hasMore = false, loadingMore 
                   <td className="px-4 py-2.5"><SentimentBadge value={item.sentiment} /></td>
                   <td className="px-4 py-2.5"><RiskBadge value={item.risk_level} /></td>
                   <td className="px-4 py-2.5">
-                    <ConfidenceBar value={(item as AnalysisItem & { pipeline_confidence?: number }).pipeline_confidence} />
+                    <ConfidenceBar value={item.pipeline_confidence} />
                   </td>
                   <td className="px-4 py-2.5 text-center">
                     {item.churn_risk
@@ -115,7 +115,7 @@ export function AnalysisTable({ items, onLoadMore, hasMore = false, loadingMore 
                   </td>
                 </tr>
                 {expanded === i && (
-                  <tr key={`${i}-detail`} className="border-b border-slate-200/70 dark:border-white/[0.04]">
+                  <tr className="border-b border-slate-200/70 dark:border-white/[0.04]">
                     <td colSpan={7} className="px-5 py-4 bg-slate-900/[0.02] dark:bg-white/[0.02]">
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in">
                         {item.raw_text && (
@@ -152,7 +152,7 @@ export function AnalysisTable({ items, onLoadMore, hasMore = false, loadingMore 
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
             {loadingMore && [0, 1, 2].map((i) => <SkeletonRow key={`sk-${i}`} />)}
           </tbody>

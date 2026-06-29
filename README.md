@@ -93,22 +93,22 @@ flowchart LR
 
 ### Deployment Topology
 
-| Machine | IP | Role |
-|---|---|---|
-| Dev laptop | 192.168.1.11 | vLLM bare-metal (RTX 4070 8GB) — port 8000 |
-| Server laptop | 192.168.1.3 | k3s cluster — all services (NodePorts below) |
+| Machine | Role |
+|---|---|
+| Dev laptop | vLLM bare-metal (RTX 4070 8GB) — port 8000 |
+| Server laptop | k3s cluster — all services (NodePorts below) |
 
-vLLM runs off-cluster. A headless k8s `Service + Endpoints` routes in-cluster DNS (`http://vllm:8000`) to the dev laptop over LAN — no code changes needed inside the cluster.
+Both machines sit on the same private LAN. vLLM runs off-cluster. A headless k8s `Service + Endpoints` routes in-cluster DNS (`http://vllm:8000`) to the dev laptop over LAN — no code changes needed inside the cluster.
 
 ```mermaid
 flowchart LR
-    subgraph DEV["Dev laptop · 192.168.1.11"]
+    subgraph DEV["Dev laptop"]
         VLLM["vLLM (bare-metal)<br/>Qwen2.5-7B-AWQ · :8000<br/>RTX 4070 8GB"]
     end
-    subgraph SRV["Server laptop · 192.168.1.3 · k3s"]
+    subgraph SRV["Server laptop · k3s"]
         direction TB
         ROUTERK["Inference Router · :8100"]
-        SVC["headless Service + Endpoints<br/>vllm:8000 → 192.168.1.11"]
+        SVC["headless Service + Endpoints<br/>vllm:8000 → dev laptop"]
         ANALY["Analyzer · :30080"]
         DASHK["Dashboard · :30300"]
         QDK[("Qdrant")]
@@ -126,8 +126,8 @@ flowchart LR
 
 | Service | NodePort | URL |
 |---|---|---|
-| Analyzer API | 30080 | `http://192.168.1.3:30080` |
-| Dashboard | 30300 | `http://192.168.1.3:30300` |
+| Analyzer API | 30080 | `http://<server-ip>:30080` |
+| Dashboard | 30300 | `http://<server-ip>:30300` |
 | Draft LLM (1.5B) | 8001 | bare-metal on server laptop |
 
 ---
@@ -161,8 +161,19 @@ Python-resolved "tools" (keyword-triggered, all scoped to the authenticated user
 - `create_ticket` — refund / complaint / escalation actions
 - FAQ lookup — common topics (`tools.py:_FAQ`)
 
-Auth: SQLite EDBMS (`edbms.py`) — login with username + password; reads are filtered to
-the customer's own account. Demo users: `alice/bob/carol/dave/eve` — password `pass123`.
+Auth: login with username + password; reads are filtered to the customer's own account.
+The seed script creates a handful of demo customer accounts (see `analyzer/chatbot/edbms.py`).
+
+**Pluggable customer DB** (`analyzer/chatbot/backends/`): the data layer is behind a
+`CustomerBackend` interface (4 methods), so the chatbot isn't tied to the demo SQLite.
+Point it at a real database with a YAML config (`CHATBOT_DB_CONFIG=…`):
+- **SQLite** — bundled demo/reference, self-seeds, zero infra (default).
+- **Generic SQL** — any SQLAlchemy DB (Postgres/MySQL/…) with **zero code**: the config
+  maps your table/column names onto the fields the chatbot needs.
+- **Anything else** (Mongo/REST/…) — implement the 4-method interface and register it.
+
+See `config/chatbot_db.example.yaml`. `edbms.py` is now a thin facade over the configured
+backend, so existing call sites are unchanged.
 
 The big 7B model is **not** used by the chatbot (it's the pipeline's model). Session
 memory is capped at 250 tokens; sessions expire after 1 hour.
@@ -260,7 +271,7 @@ vllm serve Qwen/Qwen2.5-1.5B-Instruct \
 ### 3. Deploy to k3s (server laptop)
 ```bash
 # Sync source from dev laptop (run on server)
-rsync -av vinesh@192.168.1.11:/home/vinesh/Documents/Summer2026/ ~/Summer2026/
+rsync -av <dev-user>@<dev-laptop>:~/Summer2026/ ~/Summer2026/
 
 # Build custom images
 cd ~/Summer2026
@@ -283,16 +294,18 @@ kubectl apply -f k8s/vllm/ k8s/draft-llm/ k8s/qdrant/ k8s/redpanda/ \
 
 # Verify
 kubectl -n cx-pipeline get pods
-curl http://192.168.1.3:30080/ready
+curl http://<server-ip>:30080/ready
 ```
 
 ### 4. Access
+Replace `<server-ip>` with the server laptop's LAN address.
+
 | What | URL |
 |---|---|
-| Dashboard | http://192.168.1.3:30300 |
-| Support Chat | http://192.168.1.3:30300/chat — login: `alice` / `pass123` |
-| API docs | http://192.168.1.3:30080/docs |
-| Grafana | http://192.168.1.3:30300/grafana (separate Grafana NodePort) |
+| Dashboard | http://&lt;server-ip&gt;:30300 |
+| Support Chat | http://&lt;server-ip&gt;:30300/chat — log in with a seeded EDBMS customer account |
+| API docs | http://&lt;server-ip&gt;:30080/docs |
+| Grafana | http://&lt;server-ip&gt;:30300/grafana (separate Grafana NodePort) |
 
 ---
 
@@ -371,7 +384,12 @@ bash training/merge_and_quantize.sh
 │   │   ├── context_router.py       # Keyword-routed EDBMS reads/actions → CONTEXT
 │   │   ├── cascade_llm.py          # Draft-model client (get_draft_llm) + cascade router
 │   │   ├── tools.py                # FAQ table + tool helpers
-│   │   ├── edbms.py                # SQLite customer DB (auth + purchase history)
+│   │   ├── edbms.py                # Facade over the pluggable customer backend
+│   │   ├── backends/               # Pluggable customer DB (config-selected)
+│   │   │   ├── base.py             # CustomerBackend interface + shared logic
+│   │   │   ├── config.py           # YAML/env config loader
+│   │   │   ├── sqlite_backend.py   # Bundled demo/reference (self-seeds)
+│   │   │   └── sql_backend.py      # Generic SQLAlchemy adapter (any SQL DB via config)
 │   │   ├── memory.py               # Token-capped session memory
 │   │   └── orders.py               # Purchase history queries
 │   ├── active_learning.py          # Review queue + human correction flow

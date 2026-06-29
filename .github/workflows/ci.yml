@@ -37,7 +37,7 @@ jobs:
           python -m spacy download en_core_web_sm
 
       - name: Pytest (mocked)
-        run: python -m pytest tests/test_pipeline.py tests/test_analytics.py -v
+        run: python -m pytest tests/test_pipeline.py tests/test_analytics.py tests/test_backends.py -v
 
   rust:
     name: Rust fmt + clippy + tests

@@ -106,7 +106,11 @@ def create_user(username: str, password: str, role: str = "admin") -> None:
 
 
 def verify_credentials(username: str, password: str) -> Optional[dict]:
-    """Return {username, role} on success, else None."""
+    """Return {username, role} on success, else None.
+
+    Checks dashboard_users first (operators), then falls through to EDBMS
+    customers so a single login page works for both operator and customer accounts.
+    """
     with _conn() as con:
         row = con.execute(
             "SELECT username, salt, password_hash, role FROM dashboard_users WHERE username=?",
@@ -114,6 +118,15 @@ def verify_credentials(username: str, password: str) -> Optional[dict]:
         ).fetchone()
     if row and _verify_password(password, row["salt"], row["password_hash"]):
         return {"username": row["username"], "role": row["role"]}
+
+    # Fall through to EDBMS customer accounts.
+    try:
+        from .chatbot.edbms import authenticate as edbms_auth
+        result = edbms_auth(username, password)
+        if result:
+            return {"username": username, "role": "customer"}
+    except Exception:
+        pass
     return None
 
 

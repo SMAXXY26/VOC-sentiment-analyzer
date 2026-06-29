@@ -4,59 +4,35 @@ import { startChat, ChatMessage } from "@/lib/api";
 import { getUser } from "@/lib/auth";
 import { ChatWindow } from "./ChatWindow";
 
-type State = "closed" | "connecting" | "login" | "chat";
+type State = "closed" | "connecting" | "error" | "chat";
 
 export function ChatWidget() {
   const [state, setState] = useState<State>("closed");
   const [sessionId, setSessionId] = useState("");
   const [customerName, setCustomerName] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
   const [initialMessages, setInitialMessages] = useState<ChatMessage[]>([]);
 
-  // Start a session for the given identity (no password = anonymous, named session).
-  async function startSession(user: string, pass?: string) {
-    setLoading(true);
-    setError("");
+  async function open() {
+    const user = getUser();
+    if (!user) return;
+    setState("connecting");
     try {
-      const res = await startChat(user, pass);
+      const res = await startChat(user);
       setSessionId(res.session_id);
       setCustomerName(res.customer_name || user);
       setInitialMessages(res.reply ? [{ role: "assistant", content: res.reply }] : []);
       setState("chat");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Couldn't start chat");
-      setState("login");
-    } finally {
-      setLoading(false);
+      setState("error");
     }
-  }
-
-  // Opening the widget: auto-start as the logged-in dashboard user (one login for
-  // both). Falls back to the manual login form only if somehow not signed in.
-  function open() {
-    const user = getUser();
-    if (user) {
-      setState("connecting");
-      startSession(user);
-    } else {
-      setState("login");
-    }
-  }
-
-  function login() {
-    if (!username.trim()) return;
-    startSession(username.trim(), password || undefined);
   }
 
   function reset() {
     setState("closed");
     setSessionId("");
     setInitialMessages([]);
-    setUsername("");
-    setPassword("");
     setError("");
   }
 
@@ -64,43 +40,23 @@ export function ChatWidget() {
     <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2">
       {/* Expanded panel */}
       {state !== "closed" && (
-        <div className="w-[360px] max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden bg-white/95 dark:bg-[#0a0f1e]/95 backdrop-blur-2xl border border-slate-200/70 dark:border-white/[0.10] shadow-2xl shadow-black/20 dark:shadow-black/50 animate-fade-in">
+        <div className="w-[360px] max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden bg-white/95 dark:bg-[#0a0f1e]/95 backdrop-blur-[48px] border border-white/60 dark:border-white/[0.10] shadow-2xl shadow-black/20 dark:shadow-black/50 animate-fade-in">
           {state === "connecting" && (
             <div className="p-8 flex flex-col items-center justify-center gap-3">
               <div className="w-6 h-6 border-2 border-indigo-500/30 border-t-indigo-400 rounded-full animate-spin" />
               <p className="text-[11px] text-slate-500">Starting your chat…</p>
             </div>
           )}
-          {state === "login" && (
-            <div className="p-5">
-              <p className="text-sm font-semibold text-slate-900 dark:text-white mb-0.5">CX Support Chat</p>
-              <p className="text-[11px] text-slate-500 mb-4">Sign in to access your orders and get help.</p>
-              <div className="space-y-2.5">
-                <input
-                  type="text"
-                  placeholder="Username (try: alice)"
-                  value={username}
-                  onChange={e => setUsername(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && login()}
-                  className="w-full bg-slate-900/[0.04] dark:bg-white/[0.04] border border-slate-200/70 dark:border-white/[0.08] rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/40 transition-colors"
-                />
-                <input
-                  type="password"
-                  placeholder="Password (try: pass123)"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && login()}
-                  className="w-full bg-slate-900/[0.04] dark:bg-white/[0.04] border border-slate-200/70 dark:border-white/[0.08] rounded-xl px-3 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/40 transition-colors"
-                />
-                {error && <p className="text-[11px] text-red-400">{error}</p>}
-                <button
-                  onClick={login}
-                  disabled={loading || !username.trim()}
-                  className="w-full py-2 bg-indigo-500/20 hover:bg-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-600 dark:text-indigo-300 text-sm font-medium rounded-xl border border-indigo-500/25 transition-all cursor-pointer"
-                >
-                  {loading ? "Connecting…" : "Start Chat"}
-                </button>
-              </div>
+          {state === "error" && (
+            <div className="p-5 flex flex-col gap-3">
+              <p className="text-sm font-semibold text-slate-900 dark:text-white">Chat unavailable</p>
+              <p className="text-[11px] text-red-400">{error}</p>
+              <button
+                onClick={reset}
+                className="text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors cursor-pointer"
+              >
+                Dismiss
+              </button>
             </div>
           )}
           {state === "chat" && (
@@ -123,7 +79,7 @@ export function ChatWidget() {
 
       {/* Bubble button */}
       <button
-        onClick={() => (state === "closed" ? open() : setState("closed"))}
+        onClick={() => state === "closed" ? open() : reset()}
         className="w-12 h-12 rounded-full bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 flex items-center justify-center shadow-lg shadow-indigo-500/20 transition-all cursor-pointer"
         aria-label="Open support chat"
       >

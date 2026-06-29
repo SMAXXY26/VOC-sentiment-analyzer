@@ -3,22 +3,23 @@
 @tailwind utilities;
 
 @layer base {
-  /* Light theme (default when html has no .dark class) */
+  /* Light theme — cool blue-grey like iOS 26 Liquid Glass */
   body {
-    background-color: #f8fafc;
+    background-color: #eef1f8;
     background-image:
-      radial-gradient(ellipse 70% 50% at 15% 0%, rgba(99, 102, 241, 0.08) 0%, transparent 60%),
-      radial-gradient(ellipse 60% 40% at 85% 100%, rgba(139, 92, 246, 0.06) 0%, transparent 60%);
+      radial-gradient(ellipse 80% 55% at 10% -10%, rgba(99, 102, 241, 0.18) 0%, transparent 55%),
+      radial-gradient(ellipse 60% 45% at 90% 110%, rgba(139, 92, 246, 0.14) 0%, transparent 55%),
+      radial-gradient(ellipse 50% 60% at 50% 10%, rgba(56, 189, 248, 0.07) 0%, transparent 60%);
     min-height: 100vh;
   }
 
-  /* Dark theme */
+  /* Dark theme — deep navy-black, visionOS/iOS 26 */
   html.dark body {
-    background-color: #060b18;
+    background-color: #06060f;
     background-image:
-      radial-gradient(ellipse 70% 50% at 15% 0%, rgba(99, 102, 241, 0.13) 0%, transparent 60%),
-      radial-gradient(ellipse 60% 40% at 85% 100%, rgba(139, 92, 246, 0.09) 0%, transparent 60%),
-      radial-gradient(ellipse 50% 30% at 50% 50%, rgba(6, 11, 24, 1) 0%, transparent 100%);
+      radial-gradient(ellipse 80% 55% at 10% -10%, rgba(99, 102, 241, 0.26) 0%, transparent 55%),
+      radial-gradient(ellipse 60% 45% at 90% 110%, rgba(139, 92, 246, 0.18) 0%, transparent 55%),
+      radial-gradient(ellipse 50% 40% at 50% 50%, rgba(6, 6, 15, 0.92) 0%, transparent 100%);
   }
 
   ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -30,10 +31,15 @@
 
   * { -webkit-font-smoothing: antialiased; }
 
-  /* Persisted sidebar collapse. Driven entirely by the `nav-collapsed` class that the
-     inline no-flash script (layout.tsx) sets on <html> before paint — so the sidebar
-     renders in its saved state immediately, with no expand-then-collapse flash.
-     md+ only (on mobile the nav is a horizontal bar and never collapses). */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Persisted sidebar collapse */
   @media (min-width: 768px) {
     html.nav-collapsed nav[data-sidebar] { width: 4rem; }
     html.nav-collapsed [data-nav-label] { display: none; }
@@ -43,28 +49,141 @@
 }
 
 @layer utilities {
-  /* Light glass */
+  /* Fill-mode helper — keeps elements invisible before staggered animations fire */
+  .animate-fill-both { animation-fill-mode: both; }
+
+  /* ── Apple Liquid Glass material ─────────────────────────────────────────────
+     iOS 26 / macOS Tahoe Liquid Glass:
+       • blur(52px) + saturate(200%) = pronounced vibrancy
+       • Slight cool blue tint to the glass fill (not pure white)
+       • Iridescent border via pseudo-element gradient mask (no border-radius clipping)
+       • Specular top-edge highlight (white rim = light hitting glass edge)
+  */
   .glass {
-    background: linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.6) 100%);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(15,23,42,0.08);
+    position: relative;
+    background: linear-gradient(
+      155deg,
+      rgba(225, 232, 255, 0.78) 0%,
+      rgba(210, 220, 255, 0.60) 50%,
+      rgba(230, 240, 255, 0.68) 100%
+    );
+    backdrop-filter: blur(52px) saturate(200%);
+    -webkit-backdrop-filter: blur(52px) saturate(200%);
+    border: 1px solid rgba(200, 215, 255, 0.50);
+    box-shadow:
+      0 2px 8px  rgba(80, 90, 160, 0.08),
+      0 1px 2px  rgba(80, 90, 160, 0.05),
+      inset 0 1px 0 rgba(255, 255, 255, 0.92),
+      inset 0 -1px 0 rgba(180, 195, 255, 0.12);
   }
-  .glass-hover {
-    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
-  }
-  .glass-hover:hover {
-    border-color: rgba(15,23,42,0.14);
-    background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.75) 100%);
+  /* Iridescent border shimmer — prismatic edge like light through glass */
+  .glass::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: linear-gradient(
+      135deg,
+      rgba(99, 102, 241, 0.45) 0%,
+      rgba(168, 85, 247, 0.30) 20%,
+      rgba(14, 165, 233, 0.38) 45%,
+      rgba(52, 211, 153, 0.22) 70%,
+      rgba(99, 102, 241, 0.40) 100%
+    );
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: destination-out;
+    mask-composite: exclude;
+    padding: 1px;
+    pointer-events: none;
+    opacity: 0.55;
   }
 
-  /* Dark glass */
+  .glass-hover {
+    transition: background 0.22s ease, border-color 0.22s ease,
+                box-shadow 0.22s ease, transform 0.22s cubic-bezier(0.4,0,0.2,1);
+  }
+  .glass-hover:hover {
+    background: linear-gradient(
+      155deg,
+      rgba(235, 241, 255, 0.90) 0%,
+      rgba(220, 232, 255, 0.76) 50%,
+      rgba(238, 244, 255, 0.84) 100%
+    );
+    border-color: rgba(210, 225, 255, 0.65);
+    box-shadow:
+      0 12px 32px rgba(80, 90, 160, 0.14),
+      0 4px  10px rgba(80, 90, 160, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 1),
+      inset 0 -1px 0 rgba(180, 195, 255, 0.18);
+    transform: translateY(-2px);
+  }
+  .glass-hover:hover::before { opacity: 0.80; }
+
+  /* ── Dark glass — visionOS / iOS 26 dark ─────────────────────────────────── */
   html.dark .glass {
-    background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
-    border: 1px solid rgba(255,255,255,0.08);
+    background: linear-gradient(
+      155deg,
+      rgba(130, 140, 220, 0.10) 0%,
+      rgba(100, 110, 200, 0.06) 50%,
+      rgba(120, 130, 215, 0.08) 100%
+    );
+    backdrop-filter: blur(52px) saturate(200%);
+    -webkit-backdrop-filter: blur(52px) saturate(200%);
+    border: 1px solid rgba(150, 160, 255, 0.12);
+    box-shadow:
+      0 2px 16px rgba(0, 0, 0, 0.45),
+      0 1px 4px  rgba(0, 0, 0, 0.30),
+      inset 0 1px 0 rgba(255, 255, 255, 0.09),
+      inset 0 -1px 0 rgba(120, 130, 255, 0.06);
+  }
+  html.dark .glass::before {
+    background: linear-gradient(
+      135deg,
+      rgba(99, 102, 241, 0.55) 0%,
+      rgba(168, 85, 247, 0.40) 20%,
+      rgba(14, 165, 233, 0.48) 45%,
+      rgba(52, 211, 153, 0.28) 70%,
+      rgba(99, 102, 241, 0.50) 100%
+    );
+    opacity: 0.45;
   }
   html.dark .glass-hover:hover {
-    border-color: rgba(255,255,255,0.14);
-    background: linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%);
+    background: linear-gradient(
+      155deg,
+      rgba(140, 150, 230, 0.14) 0%,
+      rgba(110, 120, 210, 0.09) 50%,
+      rgba(130, 140, 225, 0.12) 100%
+    );
+    border-color: rgba(160, 170, 255, 0.20);
+    box-shadow:
+      0 16px 48px rgba(0, 0, 0, 0.60),
+      0 6px  18px rgba(0, 0, 0, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.13),
+      inset 0 -1px 0 rgba(130, 140, 255, 0.08);
+    transform: translateY(-2px);
+  }
+  html.dark .glass-hover:hover::before { opacity: 0.70; }
+
+  /* ── Accent glass — for highlighted/active cards ─────────────────────────── */
+  .glass-accent {
+    background: linear-gradient(
+      155deg,
+      rgba(99, 102, 241, 0.12) 0%,
+      rgba(139, 92, 246, 0.08) 100%
+    );
+    border-color: rgba(99, 102, 241, 0.28);
+  }
+  html.dark .glass-accent {
+    background: linear-gradient(
+      155deg,
+      rgba(99, 102, 241, 0.18) 0%,
+      rgba(139, 92, 246, 0.10) 100%
+    );
+    border-color: rgba(99, 102, 241, 0.35);
   }
 }

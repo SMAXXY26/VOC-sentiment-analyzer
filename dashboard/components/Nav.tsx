@@ -3,12 +3,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTheme } from "@/components/ThemeProvider";
-import { logout } from "@/lib/auth";
+import { logout, getRole } from "@/lib/auth";
 
-const NAV_ITEMS = [
+const ALL_NAV_ITEMS = [
   {
     href: "/outputs",
     label: "Outputs",
+    adminOnly: false,
     icon: (
       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   {
     href: "/analyze",
     label: "Analyze",
+    adminOnly: true,
     icon: (
       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
@@ -27,6 +29,7 @@ const NAV_ITEMS = [
   {
     href: "/system",
     label: "System",
+    adminOnly: true,
     icon: (
       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21m-9-1.5h10.5a2.25 2.25 0 0 0 2.25-2.25V6.75a2.25 2.25 0 0 0-2.25-2.25H6.75A2.25 2.25 0 0 0 4.5 6.75v10.5a2.25 2.25 0 0 0 2.25 2.25Zm.75-12h9v9h-9v-9Z" />
@@ -36,6 +39,7 @@ const NAV_ITEMS = [
   {
     href: "/chat",
     label: "Chat",
+    adminOnly: false,
     icon: (
       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
@@ -46,16 +50,16 @@ const NAV_ITEMS = [
 
 export function Nav() {
   const path = usePathname();
-  // Visuals are driven by the `nav-collapsed` class on <html> (set pre-paint by the
-  // inline script in layout.tsx) — this state is only for the toggle's label/behaviour,
-  // so it's read from the DOM after mount and never used in render-time classes (no
-  // SSR/hydration mismatch, no flash).
   const [collapsed, setCollapsed] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
   const { theme, toggle } = useTheme();
 
   useEffect(() => {
     setCollapsed(document.documentElement.classList.contains("nav-collapsed"));
+    setRole(getRole());
   }, []);
+
+  const NAV_ITEMS = ALL_NAV_ITEMS.filter(item => !item.adminOnly || role === "admin");
 
   const toggleCollapse = () => {
     setCollapsed((prev) => {
@@ -73,7 +77,7 @@ export function Nav() {
   return (
     <nav
       data-sidebar
-      className="shrink-0 md:h-screen md:w-52 flex md:flex-col gap-1 p-3 bg-white/70 dark:bg-black/40 backdrop-blur-2xl border-b md:border-b-0 md:border-r border-slate-200 dark:border-white/[0.08] shadow-xl shadow-black/5 dark:shadow-black/30 transition-all duration-300"
+      className="shrink-0 md:h-screen md:w-52 flex md:flex-col gap-1 p-3 bg-white/75 dark:bg-white/[0.06] backdrop-blur-[48px] saturate-[180%] border-b md:border-b-0 md:border-r border-white/60 dark:border-white/[0.09] shadow-[0_2px_16px_rgba(0,0,0,0.07),inset_0_1px_0_rgba(255,255,255,0.85)] dark:shadow-[0_2px_24px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.07)] transition-all duration-300"
     >
       {/* Logo */}
       <div className="flex items-center gap-2 md:mb-2 md:pb-3 md:border-b border-slate-200 dark:border-white/[0.08]">

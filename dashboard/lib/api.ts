@@ -34,6 +34,7 @@ export interface AnalysisItem {
   raw_text?: string;
   feedback_id?: string;
   score?: number;
+  pipeline_confidence?: number;
 }
 
 export interface AnalysesSummary {
@@ -94,8 +95,9 @@ export async function fetchAnalyses(
   limit = 50,
   q?: string,
   filters?: SearchFilters,
+  offset = 0,
 ): Promise<{ items: AnalysisItem[]; total: number }> {
-  const params = new URLSearchParams({ limit: String(limit) });
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   if (q) params.set("q", q);
   if (filters) {
     for (const [k, v] of Object.entries(filters)) {
@@ -103,6 +105,7 @@ export async function fetchAnalyses(
     }
   }
   const res = await authFetch(`${BASE}/analyses?${params}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 

@@ -59,7 +59,7 @@ export default function SystemPage() {
           </div>
 
           {/* Endpoint info */}
-          <div className="glass rounded-2xl p-5 glass-hover">
+          <div className="rounded-2xl glass glass-hover p-5">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-4">vLLM Inference</p>
             <div className="grid grid-cols-3 gap-4">
               {[

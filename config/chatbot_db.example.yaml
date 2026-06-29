@@ -1,0 +1,61 @@
+# Chatbot customer-DB configuration.
+#
+# Point the system at this file with:  CHATBOT_DB_CONFIG=/path/to/chatbot_db.yaml
+# If unset, the bundled SQLite demo backend is used (no config needed).
+#
+# ${VAR} values are expanded from the environment, so secrets stay out of the file.
+
+# ── Option A: SQLite demo (default) ─────────────────────────────────────────────
+backend: sqlite
+# connection:
+#   path: /data/customers.db        # optional; defaults to analyzer/chatbot/edbms.db
+
+# ── Option B: any SQL database (Postgres/MySQL/SQL Server/…) ─────────────────────
+# Requires: pip install sqlalchemy <driver>  (e.g. psycopg2-binary for Postgres)
+#
+# backend: sql
+# connection:
+#   # Either a full SQLAlchemy URL …
+#   url: postgresql+psycopg2://${DB_USER}:${DB_PASS}@db.internal:5432/shop
+#   # … or components:
+#   # driver: postgresql+psycopg2
+#   # host: db.internal
+#   # port: 5432
+#   # database: shop
+#   # user: ${DB_USER}
+#   # password: ${DB_PASS}
+#
+# # Map your schema's table/column names onto the fields the chatbot needs.
+# # Only override what differs from the defaults shown.
+# mappings:
+#   customers:
+#     table: users
+#     id: id
+#     username: username
+#     password: password_hash       # column holding the (hashed) secret
+#     name: full_name
+#     email: email
+#     tier: membership_tier
+#     join_date: created_at
+#   orders:
+#     # Order history is often multi-table — point this at a flat VIEW that already
+#     # joins product names in and exposes these columns:
+#     source: customer_orders_view
+#     user_id: customer_id
+#     order_ref: order_number
+#     product: product_name
+#     category: product_category
+#     status: fulfillment_status     # values: processing|in_transit|out_for_delivery|delivered|cancelled
+#     issue: issue
+#     amount: total
+#     order_date: placed_at
+#     delivery_date: delivered_at
+#   tickets:                         # optional — omit for a read-only DB
+#     table: support_tickets
+#     user_id: customer_id
+#     ticket_ref: reference
+#     ticket_type: kind
+#
+# options:
+#   password_scheme: sha256          # sha256 (default) | plain
+#   order_limit: 10

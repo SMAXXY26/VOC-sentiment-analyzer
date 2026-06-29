@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
   RadialBarChart, RadialBar, PolarAngleAxis,
@@ -102,6 +103,9 @@ export function SentimentChart({ distribution }: { distribution: Record<string, 
 
 
 export function CategoryRadial({ categories }: { categories: Record<string, number> | undefined }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setMounted(true), 80); return () => clearTimeout(t); }, []);
+
   if (!categories) return null;
   const data = Object.entries(categories)
     .sort(([, a], [, b]) => b - a)
@@ -114,16 +118,21 @@ export function CategoryRadial({ categories }: { categories: Record<string, numb
       <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-slate-500 mb-4">Top Categories</p>
       <div className="space-y-2.5">
         {data.map((d, i) => (
-          <div key={d.name}>
+          <div
+            key={d.name}
+            className="animate-fade-in animate-fill-both"
+            style={{ animationDelay: `${i * 60}ms` }}
+          >
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-slate-700 dark:text-slate-300">{d.name}</span>
               <span className="text-xs font-mono text-slate-500 tabular-nums">{d.value}</span>
             </div>
             <div className="h-1 rounded-full bg-slate-900/[0.06] dark:bg-white/[0.04] overflow-hidden">
               <div
-                className="h-full rounded-full transition-all duration-700"
+                className="h-full rounded-full transition-all duration-700 ease-out"
                 style={{
-                  width: `${(d.value / max) * 100}%`,
+                  width: mounted ? `${(d.value / max) * 100}%` : "0%",
+                  transitionDelay: `${i * 60}ms`,
                   background: `hsl(${240 - i * 30}, 70%, 60%)`,
                 }}
               />

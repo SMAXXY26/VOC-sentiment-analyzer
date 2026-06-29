@@ -3,7 +3,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Nav } from "@/components/Nav";
 import { ChatWidget } from "@/components/ChatWidget";
-import { getToken } from "@/lib/auth";
+import { getToken, getRole } from "@/lib/auth";
+
+const ADMIN_ONLY_PATHS = ["/system", "/analyze"];
 
 /**
  * Client-side auth gate. Redirects to /login when no token is present, and owns
@@ -19,6 +21,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isLogin && !getToken()) {
       router.replace("/login");
+    } else if (!isLogin && ADMIN_ONLY_PATHS.some(p => pathname.startsWith(p)) && getRole() !== "admin") {
+      router.replace("/outputs");
     } else {
       setChecked(true);
     }
