@@ -1,33 +1,10 @@
 "use client";
 import type { SystemStats } from "@/lib/api";
 import { useCountUp } from "@/lib/hooks";
+import { ArcGauge } from "./ArcGauge";
 
 const RING_COLORS = ["#6366f1", "#22d3ee", "#f472b6", "#fb923c"];
 const LABELS = ["CPU", "RAM", "GPU VRAM", "GPU Util"];
-
-function ArcGauge({ pct, color, isHigh }: { pct: number; color: string; isHigh: boolean }) {
-  const r = 40; const cx = 50; const cy = 50;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const sx = cx + r * Math.cos(toRad(210));
-  const sy = cy - r * Math.sin(toRad(210));
-  const ex = cx + r * Math.cos(toRad(330));
-  const ey = cy - r * Math.sin(toRad(330));
-  const arcLen = (240 / 360) * 2 * Math.PI * r;
-  const fill = (pct / 100) * arcLen;
-  const trackD = `M ${sx} ${sy} A ${r} ${r} 0 1 1 ${ex} ${ey}`;
-  const strokeColor = isHigh ? "#ef4444" : color;
-
-  return (
-    <svg viewBox="0 0 100 70" className="w-full" style={{ maxWidth: 112 }}>
-      <path d={trackD} fill="none" stroke="rgba(148,163,184,0.20)" strokeWidth={7} strokeLinecap="round" />
-      <path
-        d={trackD} fill="none" stroke={strokeColor} strokeWidth={7} strokeLinecap="round"
-        strokeDasharray={arcLen} strokeDashoffset={arcLen - fill}
-        style={{ transition: "stroke-dashoffset 0.7s cubic-bezier(0.16,1,0.3,1)" }}
-      />
-    </svg>
-  );
-}
 
 function Gauge({ label, value, max, unit, color }: {
   label: string; value: number | null; max: number; unit: string; color: string;
@@ -42,15 +19,15 @@ function Gauge({ label, value, max, unit, color }: {
   return (
     <div className="glass glass-hover rounded-2xl p-4 flex flex-col items-center">
       <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-1">{label}</p>
-      <div className="relative w-full flex items-center justify-center">
-        <ArcGauge pct={pct} color={color} isHigh={isHigh} />
-        <div className="absolute flex flex-col items-center" style={{ top: "68%", transform: "translateY(-50%)" }}>
-          <span className={`text-sm font-bold ${isHigh ? "text-red-500 dark:text-red-400" : "text-slate-900 dark:text-white"}`}>
-            {displayVal}
-          </span>
-          <span className="text-[10px] text-slate-500 tabular-nums">{animatedPct}%</span>
-        </div>
-      </div>
+      <ArcGauge
+        pct={pct}
+        color={isHigh ? "#ef4444" : color}
+        value={displayVal}
+        caption={`${animatedPct}%`}
+        valueClassName={isHigh ? "text-red-500 dark:text-red-400" : "text-slate-900 dark:text-white"}
+        maxWidth="clamp(5.5rem, 70%, 8rem)"
+        durationMs={700}
+      />
       {/* Thin bar */}
       <div className="w-full mt-1 h-0.5 rounded-full bg-slate-900/10 dark:bg-white/5 overflow-hidden">
         <div

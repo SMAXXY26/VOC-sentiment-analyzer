@@ -20,6 +20,8 @@ venv/
 # ── Node / Next.js ─────────────────────────────────────────────────────────────
 dashboard/node_modules/
 dashboard/.next/
+dashboard/dashboard-standalone.css
+dashboard/tsconfig.tsbuildinfo
 
 # ── Rust build output ──────────────────────────────────────────────────────────
 kafka_queue/target/
